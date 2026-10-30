@@ -1,0 +1,48 @@
+// shapes/src/main.dva — Demonstrates shapes library features
+#use io
+#use str
+#use "shapes"
+#use color
+#use "vertex"
+#use "polyhedra"
+
+#foreign "c"
+   malloc: (size: Int) => Addr
+   free: (ptr: Addr) => ()
+
+main: () => ()
+main = !=>
+   io::out("=== Edva 3D Shapes & Polyhedra Library (shapes) ===")
+
+   buf = malloc(1024 * shapes::VERTEX_STRIDE)
+
+   // 1. Decoupled Color Providers
+   c_red = color::red
+   c_blue = color::blue
+   c_uni = shapes::uniform(c_red)
+   io::out("Uniform color r: " + str::from_float(c_uni(0).r))
+
+   c_rain0 = shapes::rainbow(0)
+   c_rain1 = shapes::rainbow(1)
+   io::out("Rainbow colors sample: r0=" + str::from_float(c_rain0.r) + ", r1=" + str::from_float(c_rain1.r))
+
+   // 2. Build Platonic Solids with color providers
+   k1 = shapes::write_tetrahedron(buf, 0, 1.0, shapes::tetrahedron_default)
+   io::out("Tetrahedron vertices written: " + str::from_int(k1))
+
+   k2 = shapes::write_cube(buf, k1, 1.0, shapes::cube_default)
+   io::out("Cube total vertices written: " + str::from_int(k2))
+
+   k3 = shapes::write_octahedron(buf, k2, 1.0, shapes::octahedron_default)
+   io::out("Octahedron total vertices written: " + str::from_int(k3))
+
+   k4 = shapes::write_dodecahedron(buf, k3, 1.0, shapes::dodecahedron_default)
+   io::out("Dodecahedron total vertices written: " + str::from_int(k4))
+
+   k5 = shapes::write_icosahedron(buf, k4, 1.0, shapes::icosahedron_default)
+   io::out("Icosahedron total vertices written: " + str::from_int(k5))
+
+   free(buf)
+   io::out("shapes library initialized and tested successfully.")
+
+main!

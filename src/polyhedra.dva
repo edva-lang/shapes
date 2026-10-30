@@ -1,0 +1,281 @@
+// shapes/src/polyhedra.dva — Procedural Polyhedra Geometry Engine
+// Complete set of the Five Platonic Solids, point-based builders, and planar geometry
+// with decoupled color providers (face_idx: Int => Color).
+
+#use const
+#use "math/geom"
+#use color
+#use "vertex"
+
+#public
+
+// Vertex counts for all five regular Platonic Solids + planar helpers
+TETRAHEDRON_VERTICES  = 12   // 4 faces * 3 vertices
+CUBE_VERTICES         = 36   // 6 faces * 2 triangles * 3 vertices
+OCTAHEDRON_VERTICES   = 24   // 8 faces * 3 vertices
+DODECAHEDRON_VERTICES = 108  // 12 faces * 3 triangles * 3 vertices
+ICOSAHEDRON_VERTICES  = 60   // 20 faces * 3 vertices
+PLANE_VERTICES        = 6    // 1 quad * 2 triangles * 3 vertices
+STAR_VERTICES         = 12   // 4 triangles * 3 vertices
+
+// -----------------------------------------------------------------------------
+// Low-Level Surface Writers (Writes into 9-float vertex buffers)
+// -----------------------------------------------------------------------------
+
+// Writes a single flat-shaded triangle with auto-computed surface normal
+write_tri: Addr, Int, geom::Vec3, geom::Vec3, geom::Vec3, color::Color => Int
+write_tri = buf, idx, a, b, c, col =>
+   norm = geom::normal3(a, b, c)
+   vertex::write_vertex(buf, idx + 0, vertex::vertex(a.x, a.y, a.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
+   vertex::write_vertex(buf, idx + 1, vertex::vertex(b.x, b.y, b.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
+   vertex::write_vertex(buf, idx + 2, vertex::vertex(c.x, c.y, c.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
+   idx + 3
+
+// Writes a triangle with per-vertex colors and an explicit normal vector
+write_tri_shaded: Addr, Int, geom::Vec3, geom::Vec3, geom::Vec3, color::Color, color::Color, color::Color, geom::Vec3 => Int
+write_tri_shaded = buf, idx, a, b, c, ca, cb, cc, norm =>
+   vertex::write_vertex(buf, idx + 0, vertex::vertex(a.x, a.y, a.z, ca.r, ca.g, ca.b, ca.a, norm.x, norm.y, norm.z))
+   vertex::write_vertex(buf, idx + 1, vertex::vertex(b.x, b.y, b.z, cb.r, cb.g, cb.b, cb.a, norm.x, norm.y, norm.z))
+   vertex::write_vertex(buf, idx + 2, vertex::vertex(c.x, c.y, c.z, cc.r, cc.g, cc.b, cc.a, norm.x, norm.y, norm.z))
+   idx + 3
+
+// Writes a planar quad (6 vertices: 2 triangles) with auto-computed surface normal
+write_quad_face: Addr, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, color::Color => Int
+write_quad_face = buf, idx, a, b, c, d, col =>
+   norm = geom::normal3(a, b, c)
+   // Triangle 1: a -> b -> c
+   vertex::write_vertex(buf, idx + 0, vertex::vertex(a.x, a.y, a.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
+   vertex::write_vertex(buf, idx + 1, vertex::vertex(b.x, b.y, b.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
+   vertex::write_vertex(buf, idx + 2, vertex::vertex(c.x, c.y, c.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
+   // Triangle 2: a -> c -> d
+   vertex::write_vertex(buf, idx + 3, vertex::vertex(a.x, a.y, a.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
+   vertex::write_vertex(buf, idx + 4, vertex::vertex(c.x, c.y, c.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
+   vertex::write_vertex(buf, idx + 5, vertex::vertex(d.x, d.y, d.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
+   idx + 6
+
+// Writes a regular pentagon face (9 vertices: 3 triangles radiating from p0) with shared normal
+write_pentagon_face: Addr, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, color::Color => Int
+write_pentagon_face = buf, idx, p0, p1, p2, p3, p4, col =>
+   norm = geom::normal3(p0, p1, p2)
+   // Triangle 1: p0 -> p1 -> p2
+   vertex::write_vertex(buf, idx + 0, vertex::vertex(p0.x, p0.y, p0.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
+   vertex::write_vertex(buf, idx + 1, vertex::vertex(p1.x, p1.y, p1.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
+   vertex::write_vertex(buf, idx + 2, vertex::vertex(p2.x, p2.y, p2.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
+   // Triangle 2: p0 -> p2 -> p3
+   vertex::write_vertex(buf, idx + 3, vertex::vertex(p0.x, p0.y, p0.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
+   vertex::write_vertex(buf, idx + 4, vertex::vertex(p2.x, p2.y, p2.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
+   vertex::write_vertex(buf, idx + 5, vertex::vertex(p3.x, p3.y, p3.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
+   // Triangle 3: p0 -> p3 -> p4
+   vertex::write_vertex(buf, idx + 6, vertex::vertex(p0.x, p0.y, p0.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
+   vertex::write_vertex(buf, idx + 7, vertex::vertex(p3.x, p3.y, p3.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
+   vertex::write_vertex(buf, idx + 8, vertex::vertex(p4.x, p4.y, p4.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
+   idx + 9
+
+// -----------------------------------------------------------------------------
+// Fundamental Point-Based Polyhedra Builders (with color provider)
+// -----------------------------------------------------------------------------
+
+// Tetrahedron from 4 arbitrary corner points
+write_tetrahedron_4pt: Addr, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, (Int => color::Color) => Int
+write_tetrahedron_4pt = buf, idx, p0, p1, p2, p3, color_fn =>
+   k1 = write_tri(buf, idx, p0, p1, p2, color_fn(0))
+   k2 = write_tri(buf, k1,  p0, p2, p3, color_fn(1))
+   k3 = write_tri(buf, k2,  p0, p3, p1, color_fn(2))
+   k4 = write_tri(buf, k3,  p1, p3, p2, color_fn(3))
+   k4
+
+// Octahedron from 6 points (top, bottom, and 4 equator points CCW from above)
+write_octahedron_6pt: Addr, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, (Int => color::Color) => Int
+write_octahedron_6pt = buf, idx, p_top, p_bot, eq0, eq1, eq2, eq3, color_fn =>
+   k1 = write_tri(buf, idx, p_top, eq0, eq1, color_fn(0))
+   k2 = write_tri(buf, k1,  p_top, eq1, eq2, color_fn(1))
+   k3 = write_tri(buf, k2,  p_top, eq2, eq3, color_fn(2))
+   k4 = write_tri(buf, k3,  p_top, eq3, eq0, color_fn(3))
+   k5 = write_tri(buf, k4,  p_bot, eq1, eq0, color_fn(4))
+   k6 = write_tri(buf, k5,  p_bot, eq2, eq1, color_fn(5))
+   k7 = write_tri(buf, k6,  p_bot, eq3, eq2, color_fn(6))
+   k8 = write_tri(buf, k7,  p_bot, eq0, eq3, color_fn(7))
+   k8
+
+// Hexahedron from 8 corner points (4 top corners CCW, 4 bottom corners CCW)
+write_hexahedron_8pt: Addr, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, (Int => color::Color) => Int
+write_hexahedron_8pt = buf, idx, t0, t1, t2, t3, b0, b1, b2, b3, color_fn =>
+   k1 = write_quad_face(buf, idx, t3, b3, b2, t2, color_fn(0)) // Front (+Z)
+   k2 = write_quad_face(buf, k1,  t2, b2, b1, t1, color_fn(1)) // Right (+X)
+   k3 = write_quad_face(buf, k2,  t1, b1, b0, t0, color_fn(2)) // Back (-Z)
+   k4 = write_quad_face(buf, k3,  t0, b0, b3, t3, color_fn(3)) // Left (-X)
+   k5 = write_quad_face(buf, k4,  t0, t3, t2, t1, color_fn(4)) // Top (+Y)
+   k6 = write_quad_face(buf, k5,  b0, b1, b2, b3, color_fn(5)) // Bottom (-Y)
+   k6
+
+// -----------------------------------------------------------------------------
+// Uniform Platonic Solids Builders (Centered at origin, sized by scale, decoupled colors)
+// -----------------------------------------------------------------------------
+
+// 1. Regular Tetrahedron (4 faces, 12 vertices) centered at origin
+write_tetrahedron: Addr, Int, Float, (Int => color::Color) => Int
+write_tetrahedron = buf, idx, size, color_fn =>
+   s = size * 0.57735026919
+   ns = 0.0 - s
+   p0 = geom::vec3( s,  s,  s)
+   p1 = geom::vec3(ns, ns,  s)
+   p2 = geom::vec3(ns,  s, ns)
+   p3 = geom::vec3( s, ns, ns)
+   write_tetrahedron_4pt(buf, idx, p0, p1, p2, p3, color_fn)
+
+// 2. Regular Hexahedron / Cube (6 faces, 36 vertices) centered at origin
+write_cube: Addr, Int, Float, (Int => color::Color) => Int
+write_cube = buf, idx, size, color_fn =>
+   h = size * 0.5
+   nh = 0.0 - h
+   t0 = geom::vec3(nh,  h, nh)
+   t1 = geom::vec3( h,  h, nh)
+   t2 = geom::vec3( h,  h,  h)
+   t3 = geom::vec3(nh,  h,  h)
+   b0 = geom::vec3(nh, nh, nh)
+   b1 = geom::vec3( h, nh, nh)
+   b2 = geom::vec3( h, nh,  h)
+   b3 = geom::vec3(nh, nh,  h)
+   write_hexahedron_8pt(buf, idx, t0, t1, t2, t3, b0, b1, b2, b3, color_fn)
+
+// 3. Regular Octahedron (8 faces, 24 vertices) centered at origin
+write_octahedron: Addr, Int, Float, (Int => color::Color) => Int
+write_octahedron = buf, idx, size, color_fn =>
+   r = size * 0.70710678118
+   nr = 0.0 - r
+   top = geom::vec3(0.0,   r, 0.0)
+   bot = geom::vec3(0.0,  nr, 0.0)
+   eq0 = geom::vec3(0.0, 0.0,   r)
+   eq1 = geom::vec3(  r, 0.0, 0.0)
+   eq2 = geom::vec3(0.0, 0.0,  nr)
+   eq3 = geom::vec3( nr, 0.0, 0.0)
+   write_octahedron_6pt(buf, idx, top, bot, eq0, eq1, eq2, eq3, color_fn)
+
+// 4. Regular Icosahedron (20 triangular faces, 60 vertices) centered at origin
+write_icosahedron: Addr, Int, Float, (Int => color::Color) => Int
+write_icosahedron = buf, idx, size, color_fn =>
+   s = size * 0.52573111212
+   a = 1.0 * s
+   b = const::phi * s
+   na = 0.0 - a
+   nb = 0.0 - b
+
+   // 12 vertices of the icosahedron (3 mutually orthogonal golden rectangles)
+   v0  = geom::vec3(0.0, na,  b)
+   v1  = geom::vec3(0.0,  a,  b)
+   v2  = geom::vec3(0.0,  a, nb)
+   v3  = geom::vec3(0.0, na, nb)
+   v4  = geom::vec3(na,  b, 0.0)
+   v5  = geom::vec3( a,  b, 0.0)
+   v6  = geom::vec3( a, nb, 0.0)
+   v7  = geom::vec3(na, nb, 0.0)
+   v8  = geom::vec3( b, 0.0, na)
+   v9  = geom::vec3( b, 0.0,  a)
+   v10 = geom::vec3(nb, 0.0,  a)
+   v11 = geom::vec3(nb, 0.0, na)
+
+   k1  = write_tri(buf, idx, v0, v9, v1,   color_fn(0))
+   k2  = write_tri(buf, k1,  v0, v1, v10,  color_fn(1))
+   k3  = write_tri(buf, k2,  v0, v10, v7,  color_fn(2))
+   k4  = write_tri(buf, k3,  v0, v7, v6,   color_fn(3))
+   k5  = write_tri(buf, k4,  v0, v6, v9,   color_fn(4))
+
+   k6  = write_tri(buf, k5,  v2, v4, v5,   color_fn(5))
+   k7  = write_tri(buf, k6,  v2, v5, v8,   color_fn(6))
+   k8  = write_tri(buf, k7,  v2, v8, v3,   color_fn(7))
+   k9  = write_tri(buf, k8,  v2, v3, v11,  color_fn(8))
+   k10 = write_tri(buf, k9,  v2, v11, v4,  color_fn(9))
+
+   k11 = write_tri(buf, k10, v1, v9, v5,   color_fn(10))
+   k12 = write_tri(buf, k11, v9, v8, v5,   color_fn(11))
+   k13 = write_tri(buf, k12, v9, v6, v8,   color_fn(12))
+   k14 = write_tri(buf, k13, v6, v3, v8,   color_fn(13))
+   k15 = write_tri(buf, k14, v6, v7, v3,   color_fn(14))
+   k16 = write_tri(buf, k15, v7, v11, v3,  color_fn(15))
+   k17 = write_tri(buf, k16, v7, v10, v11, color_fn(16))
+   k18 = write_tri(buf, k17, v10, v4, v11, color_fn(17))
+   k19 = write_tri(buf, k18, v10, v1, v4,  color_fn(18))
+   k20 = write_tri(buf, k19, v1, v5, v4,   color_fn(19))
+   k20
+
+// 5. Regular Dodecahedron (12 pentagonal faces, 108 vertices) centered at origin
+write_dodecahedron: Addr, Int, Float, (Int => color::Color) => Int
+write_dodecahedron = buf, idx, size, color_fn =>
+   s = size * 0.57735026919
+   c1 = 1.0 * s
+   cphi = const::phi * s
+   cinv = const::inv_phi * s
+   nc1 = 0.0 - c1
+   ncphi = 0.0 - cphi
+   ncinv = 0.0 - cinv
+
+   // 20 vertices of the dodecahedron
+   v0  = geom::vec3(nc1, nc1, nc1)
+   v1  = geom::vec3( c1, nc1, nc1)
+   v2  = geom::vec3( c1,  c1, nc1)
+   v3  = geom::vec3(nc1,  c1, nc1)
+   v4  = geom::vec3(nc1, nc1,  c1)
+   v5  = geom::vec3( c1, nc1,  c1)
+   v6  = geom::vec3( c1,  c1,  c1)
+   v7  = geom::vec3(nc1,  c1,  c1)
+
+   v8  = geom::vec3(0.0,  cphi,  cinv)
+   v9  = geom::vec3(0.0,  cphi, ncinv)
+   v10 = geom::vec3(0.0, ncphi,  cinv)
+   v11 = geom::vec3(0.0, ncphi, ncinv)
+
+   v12 = geom::vec3( cinv, 0.0,  cphi)
+   v13 = geom::vec3(ncinv, 0.0,  cphi)
+   v14 = geom::vec3( cinv, 0.0, ncphi)
+   v15 = geom::vec3(ncinv, 0.0, ncphi)
+
+   v16 = geom::vec3( cphi,  cinv, 0.0)
+   v17 = geom::vec3( cphi, ncinv, 0.0)
+   v18 = geom::vec3(ncphi,  cinv, 0.0)
+   v19 = geom::vec3(ncphi, ncinv, 0.0)
+
+   // 12 pentagonal faces
+   k1  = write_pentagon_face(buf, idx, v0, v15, v14, v1,  v11, color_fn(0))
+   k2  = write_pentagon_face(buf, k1,  v0, v11, v10, v4,  v19, color_fn(1))
+   k3  = write_pentagon_face(buf, k2,  v0, v19, v18, v3,  v15, color_fn(2))
+   k4  = write_pentagon_face(buf, k3,  v1, v17, v5,  v10, v11, color_fn(3))
+   k5  = write_pentagon_face(buf, k4,  v1, v14, v2,  v16, v17, color_fn(4))
+   k6  = write_pentagon_face(buf, k5,  v2, v14, v15, v3,  v9,  color_fn(5))
+   k7  = write_pentagon_face(buf, k6,  v2, v9,  v8,  v6,  v16, color_fn(6))
+   k8  = write_pentagon_face(buf, k7,  v3, v18, v7,  v8,  v9,  color_fn(7))
+   k9  = write_pentagon_face(buf, k8,  v4, v10, v5,  v12, v13, color_fn(8))
+   k10 = write_pentagon_face(buf, k9,  v4, v13, v7,  v18, v19, color_fn(9))
+   k11 = write_pentagon_face(buf, k10, v5, v17, v16, v6,  v12, color_fn(10))
+   k12 = write_pentagon_face(buf, k11, v6, v8,  v7,  v13, v12, color_fn(11))
+   k12
+
+// -----------------------------------------------------------------------------
+// Planar Geometry Builders
+// -----------------------------------------------------------------------------
+
+// Planar square/rectangle on the XZ floor with upward normal (0, 1, 0)
+write_plane: Addr, Int, Float, Float, color::Color => Int
+write_plane = buf, idx, half_w, half_d, col =>
+   nw = 0.0 - half_w
+   nd = 0.0 - half_d
+   p0 = geom::vec3(nw, 0.0, nd)
+   p1 = geom::vec3(half_w, 0.0, nd)
+   p2 = geom::vec3(half_w, 0.0, half_d)
+   p3 = geom::vec3(nw, 0.0, half_d)
+   write_quad_face(buf, idx, p0, p3, p2, p1, col)
+
+// Radial 4-quadrant base floor with upward normal (0, 1, 0) and radial gradient
+write_star_base: Addr, Int, color::Color, color::Color => Int
+write_star_base = buf, idx, center_col, edge_col =>
+   up = geom::vec3(0.0, 1.0, 0.0)
+   c0 = geom::vec3( 0.0, 0.0,  0.0)
+   pE = geom::vec3( 6.0, 0.0,  0.0)
+   pN = geom::vec3( 0.0, 0.0,  6.0)
+   pW = geom::vec3(-6.0, 0.0,  0.0)
+   pS = geom::vec3( 0.0, 0.0, -6.0)
+
+   k1 = write_tri_shaded(buf, idx, c0, pE, pN, center_col, edge_col, edge_col, up)
+   k2 = write_tri_shaded(buf, k1,  c0, pN, pW, center_col, edge_col, edge_col, up)
+   k3 = write_tri_shaded(buf, k2,  c0, pW, pS, center_col, edge_col, edge_col, up)
+   k4 = write_tri_shaded(buf, k3,  c0, pS, pE, center_col, edge_col, edge_col, up)
+   k4

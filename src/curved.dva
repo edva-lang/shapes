@@ -1,0 +1,495 @@
+// shapes/src/curved.dva — Procedural Curved & Parametric 3D Shapes
+// Provides UV Sphere, Cylinder, Cone, Torus, and 3D Filament with analytical smooth normals
+// and decoupled color providers (face_idx: Int => Color).
+
+#use const
+#use "math/geom"
+#use color
+#use "vertex"
+#use "curve"
+
+#public
+
+// -----------------------------------------------------------------------------
+// Low-Level Smooth Shading Writer (Takes per-vertex normals)
+// -----------------------------------------------------------------------------
+
+// Writes a triangle where each vertex has its own analytical smooth normal vector and per-vertex color
+write_tri_smooth_vc: Addr, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, color::Color, color::Color, color::Color => Int
+write_tri_smooth_vc = buf, idx, p0, p1, p2, n0, n1, n2, c0, c1, c2 =>
+   vertex::write_vertex(buf, idx + 0, vertex::vertex(p0.x, p0.y, p0.z, c0.r, c0.g, c0.b, c0.a, n0.x, n0.y, n0.z))
+   vertex::write_vertex(buf, idx + 1, vertex::vertex(p1.x, p1.y, p1.z, c1.r, c1.g, c1.b, c1.a, n1.x, n1.y, n1.z))
+   vertex::write_vertex(buf, idx + 2, vertex::vertex(p2.x, p2.y, p2.z, c2.r, c2.g, c2.b, c2.a, n2.x, n2.y, n2.z))
+   idx + 3
+
+// Writes a smooth quad split into 2 triangles with corner normals and corner colors
+write_quad_smooth_vc: Addr, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, color::Color, color::Color, color::Color, color::Color => Int
+write_quad_smooth_vc = buf, idx, p0, p1, p2, p3, n0, n1, n2, n3, c0, c1, c2, c3 =>
+   // Triangle 1: p0 -> p1 -> p2
+   k1 = write_tri_smooth_vc(buf, idx, p0, p1, p2, n0, n1, n2, c0, c1, c2)
+   // Triangle 2: p0 -> p2 -> p3
+   k2 = write_tri_smooth_vc(buf, k1,  p0, p2, p3, n0, n2, n3, c0, c2, c3)
+   k2
+
+// Writes a triangle where each vertex has its own analytical smooth normal vector
+write_tri_smooth: Addr, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, color::Color => Int
+write_tri_smooth = buf, idx, p0, p1, p2, n0, n1, n2, col =>
+   write_tri_smooth_vc(buf, idx, p0, p1, p2, n0, n1, n2, col, col, col)
+
+// Writes a smooth quad split into 2 triangles with corner normals
+write_quad_smooth: Addr, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, color::Color => Int
+write_quad_smooth = buf, idx, p0, p1, p2, p3, n0, n1, n2, n3, col =>
+   write_quad_smooth_vc(buf, idx, p0, p1, p2, p3, n0, n1, n2, n3, col, col, col, col)
+
+// -----------------------------------------------------------------------------
+// 1. UV Sphere
+// -----------------------------------------------------------------------------
+
+// Computes vertex count for a UV Sphere with given rings (latitude) and sectors (longitude)
+sphere_vertex_count: Int, Int => Int
+sphere_vertex_count = rings, sectors =>
+   (rings - 1) * sectors * 6
+
+// Default UV Sphere resolution presets
+SPHERE_DEFAULT_RINGS   = 12
+SPHERE_DEFAULT_SECTORS = 24
+SPHERE_DEFAULT_VERTICES = 1584 // (12 - 1) * 24 * 6
+
+// Generates a UV Sphere with analytical smooth normals
+write_sphere: Addr, Int, Float, Int, Int, (Int => color::Color) => Int
+write_sphere = buf, idx, radius, rings, sectors, color_fn =>
+   k' = idx
+   face_idx' = 0
+   r_flt = Float(rings)
+   s_flt = Float(sectors)
+
+   // Iterate through latitude rings from top to bottom
+   rings @ i =>
+      i < rings - 1 |
+         theta0 = (Float(i) * const::pi) / r_flt
+         theta1 = (Float(i + 1) * const::pi) / r_flt
+
+         sin_t0 = %sin(theta0)
+         cos_t0 = %cos(theta0)
+         sin_t1 = %sin(theta1)
+         cos_t1 = %cos(theta1)
+
+         y0 = radius * cos_t0
+         y1 = radius * cos_t1
+
+         sectors @ j =>
+            phi0 = (Float(j) * const::tau) / s_flt
+            phi1 = (Float(j + 1) * const::tau) / s_flt
+
+            cos_p0 = %cos(phi0)
+            sin_p0 = %sin(phi0)
+            cos_p1 = %cos(phi1)
+            sin_p1 = %sin(phi1)
+
+            // Four corners of the quad patch
+            // Top-left (p00)
+            p00 = geom::vec3(radius * sin_t0 * cos_p0, y0, radius * sin_t0 * sin_p0)
+            n00 = geom::vec3(sin_t0 * cos_p0, cos_t0, sin_t0 * sin_p0)
+
+            // Bottom-left (p10)
+            p10 = geom::vec3(radius * sin_t1 * cos_p0, y1, radius * sin_t1 * sin_p0)
+            n10 = geom::vec3(sin_t1 * cos_p0, cos_t1, sin_t1 * sin_p0)
+
+            // Bottom-right (p11)
+            p11 = geom::vec3(radius * sin_t1 * cos_p1, y1, radius * sin_t1 * sin_p1)
+            n11 = geom::vec3(sin_t1 * cos_p1, cos_t1, sin_t1 * sin_p1)
+
+            // Top-right (p01)
+            p01 = geom::vec3(radius * sin_t0 * cos_p1, y0, radius * sin_t0 * sin_p1)
+            n01 = geom::vec3(sin_t0 * cos_p1, cos_t0, sin_t0 * sin_p1)
+
+            col = color_fn(face_idx')
+            face_idx' = face_idx' + 1
+
+            // Middle bands & polar fans
+            k' = write_quad_smooth(buf, k', p00, p10, p11, p01, n00, n10, n11, n01, col)
+   k'
+
+write_sphere_default: Addr, Int, Float, (Int => color::Color) => Int
+write_sphere_default = buf, idx, radius, color_fn =>
+   write_sphere(buf, idx, radius, SPHERE_DEFAULT_RINGS, SPHERE_DEFAULT_SECTORS, color_fn)
+
+// -----------------------------------------------------------------------------
+// 2. Cylinder
+// -----------------------------------------------------------------------------
+
+// Computes vertex count for Cylinder (lateral wall quads + optional end caps)
+cylinder_vertex_count: Int, <> => Int
+cylinder_vertex_count = segments, capped =>
+   capped
+      | segments * 12   // 6 (walls) + 3 (top) + 3 (bottom)
+      | segments * 6    // walls only
+
+CYLINDER_DEFAULT_SEGMENTS = 24
+CYLINDER_DEFAULT_VERTICES = 288 // 24 * 12
+
+// Generates a Cylinder with analytical radial normals on walls and flat cap normals
+write_cylinder: Addr, Int, Float, Float, Int, <>, (Int => color::Color) => Int
+write_cylinder = buf, idx, radius, height, segments, capped, color_fn =>
+   k' = idx
+   face_idx' = 0
+   half_h = height * 0.5
+   nhalf_h = -half_h
+   s_flt = Float(segments)
+
+   // 1. Lateral Walls
+   segments @ j =>
+      phi0 = (Float(j) * const::tau) / s_flt
+      phi1 = (Float(j + 1) * const::tau) / s_flt
+
+      c0 = %cos(phi0)
+      s0 = %sin(phi0)
+      c1 = %cos(phi1)
+      s1 = %sin(phi1)
+
+      // Wall vertices: top-left, bottom-left, bottom-right, top-right
+      t0 = geom::vec3(radius * c0, half_h, radius * s0)
+      b0 = geom::vec3(radius * c0, nhalf_h, radius * s0)
+      b1 = geom::vec3(radius * c1, nhalf_h, radius * s1)
+      t1 = geom::vec3(radius * c1, half_h, radius * s1)
+
+      // Radial normals
+      nt0 = geom::vec3(c0, 0.0, s0)
+      nb0 = geom::vec3(c0, 0.0, s0)
+      nb1 = geom::vec3(c1, 0.0, s1)
+      nt1 = geom::vec3(c1, 0.0, s1)
+
+      col = color_fn(face_idx')
+      face_idx' = face_idx' + 1
+
+      k' = write_quad_smooth(buf, k', t0, b0, b1, t1, nt0, nb0, nb1, nt1, col)
+
+   // 2. Optional End Caps
+   capped |
+      center_top = geom::vec3(0.0, half_h, 0.0)
+      norm_top   = geom::vec3(0.0, 1.0, 0.0)
+      center_bot = geom::vec3(0.0, nhalf_h, 0.0)
+      norm_bot   = geom::vec3(0.0, -1.0, 0.0)
+
+      segments @ j =>
+         phi0 = (Float(j) * const::tau) / s_flt
+         phi1 = (Float(j + 1) * const::tau) / s_flt
+
+         c0 = %cos(phi0)
+         s0 = %sin(phi0)
+         c1 = %cos(phi1)
+         s1 = %sin(phi1)
+
+         // Top cap triangle
+         t0 = geom::vec3(radius * c0, half_h, radius * s0)
+         t1 = geom::vec3(radius * c1, half_h, radius * s1)
+         col_top = color_fn(face_idx')
+         face_idx' = face_idx' + 1
+         k' = write_tri_smooth(buf, k', center_top, t0, t1, norm_top, norm_top, norm_top, col_top)
+
+         // Bottom cap triangle
+         b0 = geom::vec3(radius * c0, nhalf_h, radius * s0)
+         b1 = geom::vec3(radius * c1, nhalf_h, radius * s1)
+         col_bot = color_fn(face_idx')
+         face_idx' = face_idx' + 1
+         k' = write_tri_smooth(buf, k', center_bot, b1, b0, norm_bot, norm_bot, norm_bot, col_bot)
+   k'
+
+write_cylinder_default: Addr, Int, Float, Float, (Int => color::Color) => Int
+write_cylinder_default = buf, idx, radius, height, color_fn =>
+   write_cylinder(buf, idx, radius, height, CYLINDER_DEFAULT_SEGMENTS, <+>, color_fn)
+
+// -----------------------------------------------------------------------------
+// 3. Cone
+// -----------------------------------------------------------------------------
+
+// Computes vertex count for Cone (lateral fan + optional base cap)
+cone_vertex_count: Int, <> => Int
+cone_vertex_count = segments, capped =>
+   capped
+      | segments * 6    // 3 (sides) + 3 (base)
+      | segments * 3    // sides only
+
+CONE_DEFAULT_SEGMENTS = 24
+CONE_DEFAULT_VERTICES = 144 // 24 * 6
+
+// Generates a Cone with analytical surface normals and base cap
+write_cone: Addr, Int, Float, Float, Int, <>, (Int => color::Color) => Int
+write_cone = buf, idx, radius, height, segments, capped, color_fn =>
+   k' = idx
+   face_idx' = 0
+   half_h = height * 0.5
+   nhalf_h = -half_h
+   s_flt = Float(segments)
+
+   apex = geom::vec3(0.0, half_h, 0.0)
+
+   // Slanted normal ratio
+   slant_len = %sqrt((radius * radius) + (height * height))
+   ny = radius / slant_len
+   nr = height / slant_len
+
+   // 1. Lateral Side Surface
+   segments @ j =>
+      phi0 = (Float(j) * const::tau) / s_flt
+      phi1 = (Float(j + 1) * const::tau) / s_flt
+
+      c0 = %cos(phi0)
+      s0 = %sin(phi0)
+      c1 = %cos(phi1)
+      s1 = %sin(phi1)
+
+      b0 = geom::vec3(radius * c0, nhalf_h, radius * s0)
+      b1 = geom::vec3(radius * c1, nhalf_h, radius * s1)
+
+      // Surface normal at base points
+      n0 = geom::vec3(nr * c0, ny, nr * s0)
+      n1 = geom::vec3(nr * c1, ny, nr * s1)
+      // Apex normal along mid-angle
+      mid_c = %cos((phi0 + phi1) * 0.5)
+      mid_s = %sin((phi0 + phi1) * 0.5)
+      na = geom::vec3(nr * mid_c, ny, nr * mid_s)
+
+      col = color_fn(face_idx')
+      face_idx' = face_idx' + 1
+
+      k' = write_tri_smooth(buf, k', apex, b0, b1, na, n0, n1, col)
+
+   // 2. Base Cap
+   capped |
+      center_bot = geom::vec3(0.0, nhalf_h, 0.0)
+      norm_bot   = geom::vec3(0.0, -1.0, 0.0)
+
+      segments @ j =>
+         phi0 = (Float(j) * const::tau) / s_flt
+         phi1 = (Float(j + 1) * const::tau) / s_flt
+
+         c0 = %cos(phi0)
+         s0 = %sin(phi0)
+         c1 = %cos(phi1)
+         s1 = %sin(phi1)
+
+         b0 = geom::vec3(radius * c0, nhalf_h, radius * s0)
+         b1 = geom::vec3(radius * c1, nhalf_h, radius * s1)
+
+         col_base = color_fn(face_idx')
+         face_idx' = face_idx' + 1
+
+         k' = write_tri_smooth(buf, k', center_bot, b1, b0, norm_bot, norm_bot, norm_bot, col_base)
+   k'
+
+write_cone_default: Addr, Int, Float, Float, (Int => color::Color) => Int
+write_cone_default = buf, idx, radius, height, color_fn =>
+   write_cone(buf, idx, radius, height, CONE_DEFAULT_SEGMENTS, <+>, color_fn)
+
+// -----------------------------------------------------------------------------
+// 4. Torus (Donut)
+// -----------------------------------------------------------------------------
+
+// Computes vertex count for Torus (radial_segments * tubular_segments * 6)
+torus_vertex_count: Int, Int => Int
+torus_vertex_count = radial, tubular =>
+   radial * tubular * 6
+
+TORUS_DEFAULT_RADIAL  = 16
+TORUS_DEFAULT_TUBULAR = 24
+TORUS_DEFAULT_VERTICES = 2304 // 16 * 24 * 6
+
+// Generates a Torus with exact analytical surface normals
+write_torus: Addr, Int, Float, Float, Int, Int, (Int => color::Color) => Int
+write_torus = buf, idx, major_r, minor_r, radial_segs, tubular_segs, color_fn =>
+   k' = idx
+   face_idx' = 0
+   rad_flt = Float(radial_segs)
+   tub_flt = Float(tubular_segs)
+
+   radial_segs @ i =>
+      u0 = (Float(i) * const::tau) / rad_flt
+      u1 = (Float(i + 1) * const::tau) / rad_flt
+
+      cos_u0 = %cos(u0)
+      sin_u0 = %sin(u0)
+      cos_u1 = %cos(u1)
+      sin_u1 = %sin(u1)
+
+      tubular_segs @ j =>
+         v0 = (Float(j) * const::tau) / tub_flt
+         v1 = (Float(j + 1) * const::tau) / tub_flt
+
+         cos_v0 = %cos(v0)
+         sin_v0 = %sin(v0)
+         cos_v1 = %cos(v1)
+         sin_v1 = %sin(v1)
+
+         // Major ring radii at u0 and u1
+         r0 = major_r + (minor_r * cos_u0)
+         r1 = major_r + (minor_r * cos_u1)
+
+         // 4 Patch vertices: (u0, v0), (u1, v0), (u1, v1), (u0, v1)
+         p00 = geom::vec3(r0 * cos_v0, minor_r * sin_u0, r0 * sin_v0)
+         p10 = geom::vec3(r1 * cos_v0, minor_r * sin_u1, r1 * sin_v0)
+         p11 = geom::vec3(r1 * cos_v1, minor_r * sin_u1, r1 * sin_v1)
+         p01 = geom::vec3(r0 * cos_v1, minor_r * sin_u0, r0 * sin_v1)
+
+         // Exact analytical surface normals (gradient unit vector)
+         n00 = geom::vec3(cos_u0 * cos_v0, sin_u0, cos_u0 * sin_v0)
+         n10 = geom::vec3(cos_u1 * cos_v0, sin_u1, cos_u1 * sin_v0)
+         n11 = geom::vec3(cos_u1 * cos_v1, sin_u1, cos_u1 * sin_v1)
+         n01 = geom::vec3(cos_u0 * cos_v1, sin_u0, cos_u0 * sin_v1)
+
+         col = color_fn(face_idx')
+         face_idx' = face_idx' + 1
+
+         k' = write_quad_smooth(buf, k', p00, p10, p11, p01, n00, n10, n11, n01, col)
+   k'
+
+write_torus_default: Addr, Int, Float, Float, (Int => color::Color) => Int
+write_torus_default = buf, idx, major_r, minor_r, color_fn =>
+   write_torus(buf, idx, major_r, minor_r, TORUS_DEFAULT_RADIAL, TORUS_DEFAULT_TUBULAR, color_fn)
+
+// -----------------------------------------------------------------------------
+// 5. Filament (3D Curve with Polar Cross-Section r = f(angle, dist_from_base))
+// -----------------------------------------------------------------------------
+
+FILAMENT_DEFAULT_POINTS   = 64
+FILAMENT_DEFAULT_SEGMENTS = 24
+
+#type FilamentSpine curve::FilamentSpine
+
+spine_points: (geom::Vec3){} => curve::FilamentSpine
+spine_points = pts => curve::spine_points(pts)
+
+spine_curve: (Float => geom::Vec3) => curve::FilamentSpine
+spine_curve = fn => curve::spine_curve(fn)
+
+// Constant cross-section radius provider: (angle, dist) => r
+const_radius: Float => (Float, Float => Float)
+const_radius = r =>
+   angle, dist => r
+
+// Computes vertex count for a Filament of `num_points` path points and `segments` radial divisions
+filament_vertex_count: Int, Int, <> => Int
+filament_vertex_count = num_points, segments, capped =>
+   num_points < 2
+      | 0
+      | capped
+         | num_points * segments * 6
+         | (num_points - 1) * segments * 6
+
+// Generates a 3D Filament swept along `spine` (`< (geom::Vec3){} | (Float => geom::Vec3) >`)
+// with `num_points` curve samples (used when `spine` is a parametric function),
+// polar cross-section `radius_fn(angle, dist_from_base)`, and color `color_fn(angle, dist_from_base)`
+write_filament: Addr, Int, curve::FilamentSpine, Int, (Float, Float => Float), Int, <>, (Float, Float => color::Color) => Int
+write_filament = buf, idx, spine, num_points, radius_fn, segments, capped, color_fn =>
+   pts = curve::resolve_spine(spine, num_points)
+   n_pts = ?pts
+   n_pts < 2 | --| idx
+
+   k' = idx
+   s_flt = Float(segments)
+
+   // Initial orthonormal frame (t0, n0, b0) at base of filament (dist = 0.0)
+   t0 = curve::curve_tangent(pts, n_pts, 0)
+   frame0  = curve::initial_frame(t0)
+   n0_init = frame0(0)
+   b0_init = frame0(1)
+
+   // Optional start cap at pts(0) with outward normal -t0
+   capped |
+      p_start = curve::get_pt(pts, 0)
+      norm_start = -t0
+      c_start = color_fn(0.0, 0.0)
+      segments @ j =>
+         phi0 = (Float(j) * const::tau) / s_flt
+         phi1 = (Float(j + 1) * const::tau) / s_flt
+         n_rad0 = (n0_init * %cos(phi0)) + (b0_init * %sin(phi0))
+         n_rad1 = (n0_init * %cos(phi1)) + (b0_init * %sin(phi1))
+         r0 = radius_fn(phi0, 0.0)
+         r1 = radius_fn(phi1, 0.0)
+         v0 = p_start + (n_rad0 * r0)
+         v1 = p_start + (n_rad1 * r1)
+         c0 = color_fn(phi0, 0.0)
+         c1 = color_fn(phi1, 0.0)
+         k' = write_tri_smooth_vc(buf, k', p_start, v1, v0, norm_start, norm_start, norm_start, c_start, c1, c0)
+
+   t_curr' = t0
+   n_curr' = n0_init
+   b_curr' = b0_init
+   dist_curr' = 0.0
+
+   // Sweep polar cross-section segments along consecutive curve points
+   (n_pts - 1) @ i =>
+      p_curr = curve::get_pt(pts, i)
+      p_next = curve::get_pt(pts, i + 1)
+      t_next = curve::curve_tangent(pts, n_pts, i + 1)
+      dist_next = dist_curr' + geom::dist3(p_curr, p_next)
+
+      // Parallel transport normal n_curr' onto plane perpendicular to t_next
+      frame_next = curve::transport_frame(n_curr', t_next)
+      n_next = frame_next(0)
+      b_next = frame_next(1)
+
+      segments @ j =>
+         phi0 = (Float(j) * const::tau) / s_flt
+         phi1 = (Float(j + 1) * const::tau) / s_flt
+         c0 = %cos(phi0)
+         s0 = %sin(phi0)
+         c1 = %cos(phi1)
+         s1 = %sin(phi1)
+
+         e_r00 = (n_curr' * c0) + (b_curr' * s0)
+         e_r01 = (n_curr' * c1) + (b_curr' * s1)
+         e_r10 = (n_next  * c0) + (b_next  * s0)
+         e_r11 = (n_next  * c1) + (b_next  * s1)
+
+         r00 = radius_fn(phi0, dist_curr')
+         r01 = radius_fn(phi1, dist_curr')
+         r10 = radius_fn(phi0, dist_next)
+         r11 = radius_fn(phi1, dist_next)
+
+         p00 = p_curr + (e_r00 * r00)
+         p01 = p_curr + (e_r01 * r01)
+         p10 = p_next + (e_r10 * r10)
+         p11 = p_next + (e_r11 * r11)
+
+         n00 = curve::polar_normal(radius_fn, phi0, dist_curr', t_curr', n_curr', b_curr')
+         n01 = curve::polar_normal(radius_fn, phi1, dist_curr', t_curr', n_curr', b_curr')
+         n10 = curve::polar_normal(radius_fn, phi0, dist_next,  t_next,  n_next,  b_next)
+         n11 = curve::polar_normal(radius_fn, phi1, dist_next,  t_next,  n_next,  b_next)
+
+         col00 = color_fn(phi0, dist_curr')
+         col01 = color_fn(phi1, dist_curr')
+         col11 = color_fn(phi1, dist_next)
+         col10 = color_fn(phi0, dist_next)
+
+         k' = write_quad_smooth_vc(buf, k', p00, p01, p11, p10, n00, n01, n11, n10, col00, col01, col11, col10)
+
+      t_curr' = t_next
+      n_curr' = n_next
+      b_curr' = b_next
+      dist_curr' = dist_next
+
+   // Optional end cap at pts(n_pts - 1) with outward normal +t_curr'
+   capped |
+      p_end = curve::get_pt(pts, n_pts - 1)
+      norm_end = t_curr'
+      c_end = color_fn(0.0, dist_curr')
+      segments @ j =>
+         phi0 = (Float(j) * const::tau) / s_flt
+         phi1 = (Float(j + 1) * const::tau) / s_flt
+         n_rad0 = (n_curr' * %cos(phi0)) + (b_curr' * %sin(phi0))
+         n_rad1 = (n_curr' * %cos(phi1)) + (b_curr' * %sin(phi1))
+         r0 = radius_fn(phi0, dist_curr')
+         r1 = radius_fn(phi1, dist_curr')
+         v0 = p_end + (n_rad0 * r0)
+         v1 = p_end + (n_rad1 * r1)
+         c0 = color_fn(phi0, dist_curr')
+         c1 = color_fn(phi1, dist_curr')
+         k' = write_tri_smooth_vc(buf, k', p_end, v0, v1, norm_end, norm_end, norm_end, c_end, c0, c1)
+
+   k'
+
+write_filament_default: Addr, Int, curve::FilamentSpine, (Float, Float => Float),
+   (Float, Float => color::Color) => Int
+write_filament_default = buf, idx, spine, radius_fn, color_fn =>
+   write_filament(buf, idx, spine, FILAMENT_DEFAULT_POINTS, radius_fn, FILAMENT_DEFAULT_SEGMENTS, <+>, color_fn)

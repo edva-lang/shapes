@@ -1,0 +1,96 @@
+// shapes/src/curve.dva — 3D Parametric Curve Framing & Polar Cross-Section Differential Geometry
+// Provides spine representations (point arrays or parametric curves), smooth tangent estimation,
+// parallel transport orthonormal frames (T, N, B), and analytical polar surface normals.
+
+#use "math/geom"
+
+#public
+
+// Filament 3D spine representation:
+//   - Positive slot (`<+ pts ->` or `spine_points(pts)`): explicit array of 3D curve points `(geom::Vec3){}`
+//   - Negative slot (`<- fn +>` or `spine_curve(fn)`): parametric 3D curve `u: Float => geom::Vec3` sampled over `u in [0.0, 1.0]`
+#type FilamentSpine < (geom::Vec3){} | (Float => geom::Vec3) >
+
+spine_points: (geom::Vec3){} => FilamentSpine
+spine_points = pts => <+ pts ->
+
+spine_curve: (Float => geom::Vec3) => FilamentSpine
+spine_curve = fn => <- fn +>
+
+// Materializes a `FilamentSpine` into a sampled `(geom::Vec3){}` point array
+resolve_spine: FilamentSpine, Int => (geom::Vec3){}
+resolve_spine = spine, num_points =>
+   spine
+      | pts => pts
+      | fn =>
+         pts = (geom::Vec3){}
+         num_points < 2
+            | pts
+            |
+               denom = Float(num_points - 1)
+               num_points @ i =>
+                  u = Float(i) / denom
+                  pts += fn(u)
+               pts
+
+// Safe point lookup from growable Vec3 array without panic-unwrap (Wasm-friendly)
+get_pt: (geom::Vec3){}, Int => geom::Vec3
+get_pt = pts, i =>
+   pts(i) | _ | geom::vec3(0.0, 0.0, 0.0)
+
+// Computes smooth unit tangent along the 3D curve at point index `i`
+curve_tangent: (geom::Vec3){}, Int, Int => geom::Vec3
+curve_tangent = pts, n_pts, i =>
+   i == 0
+      | geom::norm3(get_pt(pts, 1) - get_pt(pts, 0))
+      | i == n_pts - 1
+         | geom::norm3(get_pt(pts, n_pts - 1) - get_pt(pts, n_pts - 2))
+         |
+            d0 = geom::norm3(get_pt(pts, i) - get_pt(pts, i - 1))
+            d1 = geom::norm3(get_pt(pts, i + 1) - get_pt(pts, i))
+            sum = d0 + d1
+            geom::dot3(sum, sum) > 0.000001
+               | geom::norm3(sum)
+               | d1
+
+// Computes initial normal and binormal `(n0, b0)` orthogonal to tangent `t0`
+initial_frame: geom::Vec3 => (geom::Vec3, geom::Vec3)
+initial_frame = t0 =>
+   up0 = %abs(t0.y) < 0.9 | geom::vec3(0.0, 1.0, 0.0) | geom::vec3(1.0, 0.0, 0.0)
+   n0 = geom::norm3(geom::cross3(t0, up0))
+   b0 = geom::norm3(geom::cross3(t0, n0))
+   (n0, b0)
+
+// Parallel-transports normal `n_curr` onto the plane orthogonal to `t_next`, returning `(n_next, b_next)`
+transport_frame: geom::Vec3, geom::Vec3 => (geom::Vec3, geom::Vec3)
+transport_frame = n_curr, t_next =>
+   proj = n_curr - (t_next * geom::dot3(n_curr, t_next))
+   n_next = geom::dot3(proj, proj) > 1e-6
+      | geom::norm3(proj)
+      |
+         up_fb = %abs(t_next.y) < 0.9 | geom::vec3(0.0, 1.0, 0.0) | geom::vec3(1.0, 0.0, 0.0)
+         geom::norm3(geom::cross3(t_next, up_fb))
+   b_next = geom::norm3(geom::cross3(t_next, n_next))
+   (n_next, b_next)
+
+// Computes analytical smooth outward surface normal for polar cross-section `r(phi, dist)`
+polar_normal: (Float, Float => Float), Float, Float, geom::Vec3, geom::Vec3, geom::Vec3 => geom::Vec3
+polar_normal = radius_fn, phi, dist, t_vec, n_vec, b_vec =>
+   c = %cos(phi)
+   s = %sin(phi)
+   e_r   = (n_vec * c) + (b_vec * s)
+   e_phi = (b_vec * c) - (n_vec * s)
+
+   r_raw = radius_fn(phi, dist)
+   r = r_raw > 0.0001 | r_raw | 0.0001
+   dphi = 0.005
+   ds   = 0.005
+   dr_dphi = (radius_fn(phi + dphi, dist) - radius_fn(phi - dphi, dist)) / (2.0 * dphi)
+   s_lo    = dist > ds | dist - ds | 0.0
+   s_span  = (dist + ds) - s_lo
+   dr_ds   = (radius_fn(phi, dist + ds) - radius_fn(phi, s_lo)) / s_span
+
+   raw_n = (e_r * r) - (e_phi * dr_dphi) - (t_vec * (r * dr_ds))
+   geom::dot3(raw_n, raw_n) > 0.000001
+      | geom::norm3(raw_n)
+      | e_r

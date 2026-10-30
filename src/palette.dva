@@ -1,0 +1,95 @@
+// shapes/src/palette.dva — 3D mesh face palettes and color providers for polyhedra
+
+#use color
+
+#public
+
+// --- 3D Mesh Face Palette Providers ---
+
+// Classic high-contrast distinct cube 6-face coloring
+cube_default: Int => color::Color
+cube_default = face =>
+   face % 6
+      [0] color::cyan      // Front (+Z)
+      [1] color::amber     // Right (+X)
+      [2] color::sapphire  // Back (-Z)
+      [3] color::ruby      // Left (-X)
+      [4] color::emerald   // Top (+Y)
+      |   color::slate     // Bottom (-Y)
+
+// Distinct 8-face coloring for Octahedron
+octahedron_default: Int => color::Color
+octahedron_default = face =>
+   face % 8
+      [0] color::amber
+      [1] color::cyan
+      [2] color::emerald
+      [3] color::violet
+      [4] color::ruby
+      [5] color::sapphire
+      [6] color::turquoise
+      |   color::magenta
+
+// Distinct 4-face coloring for Tetrahedron
+tetrahedron_default: Int => color::Color
+tetrahedron_default = face =>
+   face % 4
+      [0] color::ruby
+      [1] color::amber
+      [2] color::emerald
+      |   color::sapphire
+
+// Distinct 12-face coloring for Dodecahedron
+dodecahedron_default: Int => color::Color
+dodecahedron_default = face =>
+   face % 12
+      [0]  color::rgb(0.95, 0.35, 0.25)
+      [1]  color::rgb(0.95, 0.55, 0.20)
+      [2]  color::rgb(0.90, 0.75, 0.20)
+      [3]  color::rgb(0.70, 0.85, 0.25)
+      [4]  color::rgb(0.35, 0.85, 0.35)
+      [5]  color::rgb(0.20, 0.85, 0.65)
+      [6]  color::rgb(0.20, 0.80, 0.90)
+      [7]  color::rgb(0.25, 0.60, 0.95)
+      [8]  color::rgb(0.40, 0.45, 0.95)
+      [9]  color::rgb(0.60, 0.35, 0.95)
+      [10] color::rgb(0.80, 0.30, 0.90)
+      |    color::rgb(0.95, 0.25, 0.75)
+
+// Distinct 20-face coloring for Icosahedron
+icosahedron_default: Int => color::Color
+icosahedron_default = face =>
+   face % 20
+      [0]  color::rgb(0.95, 0.35, 0.25)
+      [1]  color::rgb(0.95, 0.55, 0.20)
+      [2]  color::rgb(0.90, 0.75, 0.20)
+      [3]  color::rgb(0.70, 0.85, 0.25)
+      [4]  color::rgb(0.35, 0.85, 0.35)
+      [5]  color::rgb(0.20, 0.85, 0.65)
+      [6]  color::rgb(0.20, 0.80, 0.90)
+      [7]  color::rgb(0.25, 0.60, 0.95)
+      [8]  color::rgb(0.40, 0.45, 0.95)
+      [9]  color::rgb(0.60, 0.35, 0.95)
+      [10] color::rgb(0.80, 0.30, 0.90)
+      [11] color::rgb(0.95, 0.25, 0.75)
+      [12] color::rgb(0.95, 0.25, 0.50)
+      [13] color::rgb(0.95, 0.35, 0.35)
+      [14] color::rgb(0.90, 0.65, 0.25)
+      [15] color::rgb(0.75, 0.85, 0.30)
+      [16] color::rgb(0.45, 0.85, 0.45)
+      [17] color::rgb(0.25, 0.85, 0.75)
+      [18] color::rgb(0.30, 0.65, 0.95)
+      |    color::rgb(0.55, 0.40, 0.95)
+
+// Smooth iridescent jewel palette for curved shapes
+curved_default: Int => color::Color
+curved_default = idx =>
+   idx % 8
+      [0] color::rgb(0.20, 0.75, 0.95) // Cyan
+      [1] color::rgb(0.25, 0.50, 0.95) // Azure
+      [2] color::rgb(0.45, 0.35, 0.95) // Violet
+      [3] color::rgb(0.75, 0.30, 0.90) // Magenta
+      [4] color::rgb(0.95, 0.35, 0.55) // Coral
+      [5] color::rgb(0.95, 0.65, 0.25) // Amber
+      [6] color::rgb(0.65, 0.85, 0.25) // Lime
+      |   color::rgb(0.20, 0.85, 0.65) // Emerald
