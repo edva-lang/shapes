@@ -7,23 +7,23 @@
 #public
 
 // Filament 3D spine representation:
-//   - Positive slot (`<+ pts ->` or `spine_points(pts)`): explicit array of 3D curve points `(geom::Vec3){}`
+//   - Positive slot (`<+ pts ->` or `spine_points(pts)`): explicit array of 3D curve points `geom::Vec3{}`
 //   - Negative slot (`<- fn +>` or `spine_curve(fn)`): parametric 3D curve `u: Float => geom::Vec3` sampled over `u in [0.0, 1.0]`
-#type FilamentSpine < (geom::Vec3){} | (Float => geom::Vec3) >
+#type FilamentSpine < geom::Vec3{} | (Float => geom::Vec3) >
 
-spine_points: (geom::Vec3){} => FilamentSpine
+spine_points: geom::Vec3{} => FilamentSpine
 spine_points = pts => <+ pts ->
 
 spine_curve: (Float => geom::Vec3) => FilamentSpine
 spine_curve = fn => <- fn +>
 
-// Materializes a `FilamentSpine` into a sampled `(geom::Vec3){}` point array
-resolve_spine: FilamentSpine, Int => (geom::Vec3){}
+// Materializes a `FilamentSpine` into a sampled `geom::Vec3{}` point array
+resolve_spine: FilamentSpine, Int => geom::Vec3{}
 resolve_spine = spine, num_points =>
    spine
       | pts => pts
       | fn =>
-         pts = (geom::Vec3){}
+         pts = geom::Vec3{}
          num_points < 2
             | pts
             |
@@ -34,12 +34,12 @@ resolve_spine = spine, num_points =>
                pts
 
 // Safe point lookup from growable Vec3 array without panic-unwrap (Wasm-friendly)
-get_pt: (geom::Vec3){}, Int => geom::Vec3
+get_pt: geom::Vec3{}, Int => geom::Vec3
 get_pt = pts, i =>
    pts(i) | _ | geom::vec3(0.0, 0.0, 0.0)
 
 // Computes smooth unit tangent along the 3D curve at point index `i`
-curve_tangent: (geom::Vec3){}, Int, Int => geom::Vec3
+curve_tangent: geom::Vec3{}, Int, Int => geom::Vec3
 curve_tangent = pts, n_pts, i =>
    i == 0
       | geom::norm3(get_pt(pts, 1) - get_pt(pts, 0))

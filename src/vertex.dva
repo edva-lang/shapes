@@ -3,7 +3,7 @@
 #public
 
 // Structured packed record for GPU 3D vertex data (10 floats: pos3, rgba4, norm3)
-Vertex: #packed (
+#type Vertex #packed (
    px: f32,
    py: f32,
    pz: f32,
@@ -21,16 +21,16 @@ VERTEX_STRIDE = 40        // 10 floats * 4 bytes
 // Packed vertex constructor (pos3 + rgba4 + norm3)
 vertex: Float, Float, Float, Float, Float, Float, Float, Float, Float, Float => Vertex
 vertex = px, py, pz, cr, cg, cb, ca, nx, ny, nz =>
-   Vertex((f32(px), f32(py), f32(pz), f32(cr), f32(cg), f32(cb), f32(ca), f32(nx), f32(ny), f32(nz)))
+   Vertex(f32(px), f32(py), f32(pz), f32(cr), f32(cg), f32(cb), f32(ca), f32(nx), f32(ny), f32(nz))
 
 // Write a packed vertex record directly into memory at vertex index `idx`
 write_vertex: Addr, Int, Vertex => ()
 write_vertex = buf, idx, v =>
-   %memcpy(buf + (idx * VERTEX_STRIDE), &v, #size(Vertex))
+   %memcpy(buf + (idx * VERTEX_STRIDE), &v, #size Vertex)
 
 // Drawable slice within a GPU vertex buffer (first vertex index + vertex count)
 #type Mesh (start: Int, count: Int)
 
 mesh: Int, Int => Mesh
 mesh = start, end_idx =>
-   Mesh((start, end_idx - start))
+   Mesh(start, end_idx - start)

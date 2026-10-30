@@ -151,7 +151,7 @@ write_torus = buf, idx, r_maj, r_min, rad, tub, col => curved::write_torus(buf, 
 const_radius: Float => (Float, Float => Float)
 const_radius = r => curved::const_radius(r)
 
-spine_points: (geom::Vec3){} => curved::FilamentSpine
+spine_points: geom::Vec3{} => curved::FilamentSpine
 spine_points = pts => curved::spine_points(pts)
 
 spine_curve: (Float => geom::Vec3) => curved::FilamentSpine

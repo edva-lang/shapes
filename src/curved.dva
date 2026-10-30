@@ -51,9 +51,9 @@ sphere_vertex_count = rings, sectors =>
    (rings - 1) * sectors * 6
 
 // Default UV Sphere resolution presets
-SPHERE_DEFAULT_RINGS   = 12
-SPHERE_DEFAULT_SECTORS = 24
-SPHERE_DEFAULT_VERTICES = 1584 // (12 - 1) * 24 * 6
+SPHERE_DEFAULT_RINGS    = 12
+SPHERE_DEFAULT_SECTORS  = 24
+SPHERE_DEFAULT_VERTICES = (SPHERE_DEFAULT_RINGS - 1) * SPHERE_DEFAULT_SECTORS * 6
 
 // Generates a UV Sphere with analytical smooth normals
 write_sphere: Addr, Int, Float, Int, Int, (Int => color::Color) => Int
@@ -126,7 +126,7 @@ cylinder_vertex_count = segments, capped =>
       | segments * 6    // walls only
 
 CYLINDER_DEFAULT_SEGMENTS = 24
-CYLINDER_DEFAULT_VERTICES = 288 // 24 * 12
+CYLINDER_DEFAULT_VERTICES = CYLINDER_DEFAULT_SEGMENTS * 12
 
 // Generates a Cylinder with analytical radial normals on walls and flat cap normals
 write_cylinder: Addr, Int, Float, Float, Int, <>, (Int => color::Color) => Int
@@ -211,7 +211,7 @@ cone_vertex_count = segments, capped =>
       | segments * 3    // sides only
 
 CONE_DEFAULT_SEGMENTS = 24
-CONE_DEFAULT_VERTICES = 144 // 24 * 6
+CONE_DEFAULT_VERTICES = CONE_DEFAULT_SEGMENTS * 6
 
 // Generates a Cone with analytical surface normals and base cap
 write_cone: Addr, Int, Float, Float, Int, <>, (Int => color::Color) => Int
@@ -291,9 +291,9 @@ torus_vertex_count: Int, Int => Int
 torus_vertex_count = radial, tubular =>
    radial * tubular * 6
 
-TORUS_DEFAULT_RADIAL  = 16
-TORUS_DEFAULT_TUBULAR = 24
-TORUS_DEFAULT_VERTICES = 2304 // 16 * 24 * 6
+TORUS_DEFAULT_RADIAL   = 16
+TORUS_DEFAULT_TUBULAR  = 24
+TORUS_DEFAULT_VERTICES = TORUS_DEFAULT_RADIAL * TORUS_DEFAULT_TUBULAR * 6
 
 // Generates a Torus with exact analytical surface normals
 write_torus: Addr, Int, Float, Float, Int, Int, (Int => color::Color) => Int
@@ -356,7 +356,7 @@ FILAMENT_DEFAULT_SEGMENTS = 24
 
 #type FilamentSpine curve::FilamentSpine
 
-spine_points: (geom::Vec3){} => curve::FilamentSpine
+spine_points: geom::Vec3{} => curve::FilamentSpine
 spine_points = pts => curve::spine_points(pts)
 
 spine_curve: (Float => geom::Vec3) => curve::FilamentSpine
@@ -376,7 +376,7 @@ filament_vertex_count = num_points, segments, capped =>
          | num_points * segments * 6
          | (num_points - 1) * segments * 6
 
-// Generates a 3D Filament swept along `spine` (`< (geom::Vec3){} | (Float => geom::Vec3) >`)
+// Generates a 3D Filament swept along `spine` (`< geom::Vec3{} | (Float => geom::Vec3) >`)
 // with `num_points` curve samples (used when `spine` is a parametric function),
 // polar cross-section `radius_fn(angle, dist_from_base)`, and color `color_fn(angle, dist_from_base)`
 write_filament: Addr, Int, curve::FilamentSpine, Int, (Float, Float => Float), Int, <>, (Float, Float => color::Color) => Int

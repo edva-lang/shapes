@@ -9,7 +9,7 @@
 - **Decoupled RGBA Coloring**: Builders never hardcode colors. Polyhedra and curved surfaces accept face/sector color providers (`Int => Color`), and filaments accept polar-axial color providers (`(angle: Float, dist: Float => Color)`). Includes combinators for `uniform`, `glass` (translucent alpha), `gradient` (linear & Oklab), `rainbow`, `warm`, `cool`, and canonical Platonic palettes.
 - **Exact Platonic Solid Geometry**: Uses golden ratio $\phi$ (`const::phi`), inverse golden ratio $\phi^{-1}$ (`const::inv_phi`), and root constants directly from `std/const`.
 - **Automatic Surface Normals**: Flat face normals via normalized cross products (`geom::normal3`) and analytical smooth surface derivatives (`curve::polar_normal`) for curved and polar cross-section shapes.
-- **3D Curve Framing & Parallel Transport (`shapes/curve`)**: Supports both discrete polyline point sequences `(geom::Vec3){}` and continuous parametric curves `(Float => geom::Vec3)` via the `FilamentSpine` choice type, propagating twist-free Bishop frames (`initial_frame`, `transport_frame`) along any 3D curve.
+- **3D Curve Framing & Parallel Transport (`shapes/curve`)**: Supports both discrete polyline point sequences `geom::Vec3{}` and continuous parametric curves `(Float => geom::Vec3)` via the `FilamentSpine` choice type, propagating twist-free Bishop frames (`initial_frame`, `transport_frame`) along any 3D curve.
 - **Direct 10-Float RGBA GPU Vertex Layout (`VERTEX_STRIDE = 40` bytes)**: Writes interleaved `(px, py, pz, cr, cg, cb, ca, nx, ny, nz)` `f32` vertices directly into target memory buffers, paired with `shapes::Mesh` (`(start: Int, count: Int)`) slices for clean draw-call submission.
 - **Zero WebAssembly Allocations**: Safe for high-frequency 60 FPS WebGL/WebGPU render loops without garbage collection or heap churn.
 
@@ -66,7 +66,7 @@ ico_mesh = shapes::mesh(s1, k') // Mesh((start: 108, count: 60))
 
 ### 2. Parametric 3D Filament with Polar Cross-Section & Axial Color Gradient
 
-`shapes::write_filament` sweeps a polar cross-section `radius_fn(angle, dist)` and surface color `color_fn(angle, dist)` (`angle` $\in [0, 2\pi]$, `dist` $\in [0, 1]$) along a `FilamentSpine`—which can be either a parametric curve function `Float => geom::Vec3` (`shapes::spine_curve`) or a discrete point array `(geom::Vec3){}` (`shapes::spine_points`):
+`shapes::write_filament` sweeps a polar cross-section `radius_fn(angle, dist)` and surface color `color_fn(angle, dist)` (`angle` $\in [0, 2\pi]$, `dist` $\in [0, 1]$) along a `FilamentSpine`—which can be either a parametric curve function `Float => geom::Vec3` (`shapes::spine_curve`) or a discrete point array `geom::Vec3{}` (`shapes::spine_points`):
 
 ```dva
 #use const
