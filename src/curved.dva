@@ -1,8 +1,9 @@
 // shapes/src/curved.dva — Procedural Curved & Parametric 3D Shapes
-// Provides UV Sphere, Cylinder, Cone, Torus, and 3D Filament with analytical smooth normals
+// Provides UV Sphere, Icosphere, Cylinder, Cone, Torus, and 3D Filament with analytical smooth normals
 // and decoupled color providers (face_idx: Int => Color).
 
 #use const
+#use math
 #use "math/geom"
 #use color
 #use "vertex"
@@ -11,33 +12,53 @@
 #public
 
 // -----------------------------------------------------------------------------
-// Low-Level Smooth Shading Writer (Takes per-vertex normals)
+// Low-Level Smooth Shading Writer (Takes per-vertex normals and UV coordinates)
 // -----------------------------------------------------------------------------
 
-// Writes a triangle where each vertex has its own analytical smooth normal vector and per-vertex color
-write_tri_smooth_vc: Addr, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, color::Color, color::Color, color::Color => Int
-write_tri_smooth_vc = buf, idx, p0, p1, p2, n0, n1, n2, c0, c1, c2 =>
-   vertex::write_vertex(buf, idx + 0, vertex::vertex(p0.x, p0.y, p0.z, c0.r, c0.g, c0.b, c0.a, n0.x, n0.y, n0.z))
-   vertex::write_vertex(buf, idx + 1, vertex::vertex(p1.x, p1.y, p1.z, c1.r, c1.g, c1.b, c1.a, n1.x, n1.y, n1.z))
-   vertex::write_vertex(buf, idx + 2, vertex::vertex(p2.x, p2.y, p2.z, c2.r, c2.g, c2.b, c2.a, n2.x, n2.y, n2.z))
+// Writes a triangle with per-vertex normals, per-vertex colors, and per-vertex UV coordinates
+write_tri_smooth_vc_uv: Builder, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, color::Color, color::Color, color::Color, geom::Vec2, geom::Vec2, geom::Vec2 => Int
+write_tri_smooth_vc_uv = buf, idx, p0, p1, p2, n0, n1, n2, c0, c1, c2, uv0, uv1, uv2 =>
+   vertex::write_vertex(buf, idx + 0, vertex::vertex_uv(p0.x, p0.y, p0.z, c0.r, c0.g, c0.b, c0.a, n0.x, n0.y, n0.z, uv0.x, uv0.y))
+   vertex::write_vertex(buf, idx + 1, vertex::vertex_uv(p1.x, p1.y, p1.z, c1.r, c1.g, c1.b, c1.a, n1.x, n1.y, n1.z, uv1.x, uv1.y))
+   vertex::write_vertex(buf, idx + 2, vertex::vertex_uv(p2.x, p2.y, p2.z, c2.r, c2.g, c2.b, c2.a, n2.x, n2.y, n2.z, uv2.x, uv2.y))
    idx + 3
 
-// Writes a smooth quad split into 2 triangles with corner normals and corner colors
-write_quad_smooth_vc: Addr, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, color::Color, color::Color, color::Color, color::Color => Int
-write_quad_smooth_vc = buf, idx, p0, p1, p2, p3, n0, n1, n2, n3, c0, c1, c2, c3 =>
+// Writes a smooth quad split into 2 triangles with corner normals, corner colors, and corner UVs
+write_quad_smooth_vc_uv: Builder, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, color::Color, color::Color, color::Color, color::Color, geom::Vec2, geom::Vec2, geom::Vec2, geom::Vec2 => Int
+write_quad_smooth_vc_uv = buf, idx, p0, p1, p2, p3, n0, n1, n2, n3, c0, c1, c2, c3, uv0, uv1, uv2, uv3 =>
    // Triangle 1: p0 -> p1 -> p2
-   k1 = write_tri_smooth_vc(buf, idx, p0, p1, p2, n0, n1, n2, c0, c1, c2)
+   k1 = write_tri_smooth_vc_uv(buf, idx, p0, p1, p2, n0, n1, n2, c0, c1, c2, uv0, uv1, uv2)
    // Triangle 2: p0 -> p2 -> p3
-   k2 = write_tri_smooth_vc(buf, k1,  p0, p2, p3, n0, n2, n3, c0, c2, c3)
+   k2 = write_tri_smooth_vc_uv(buf, k1,  p0, p2, p3, n0, n2, n3, c0, c2, c3, uv0, uv2, uv3)
    k2
 
+// Writes a triangle where each vertex has its own analytical smooth normal vector and per-vertex color
+write_tri_smooth_vc: Builder, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, color::Color, color::Color, color::Color => Int
+write_tri_smooth_vc = buf, idx, p0, p1, p2, n0, n1, n2, c0, c1, c2 =>
+   write_tri_smooth_vc_uv(buf, idx, p0, p1, p2, n0, n1, n2, c0, c1, c2, geom::vec2(0.0, 0.0), geom::vec2(1.0, 0.0), geom::vec2(0.5, 1.0))
+
+// Writes a smooth quad split into 2 triangles with corner normals and corner colors
+write_quad_smooth_vc: Builder, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, color::Color, color::Color, color::Color, color::Color => Int
+write_quad_smooth_vc = buf, idx, p0, p1, p2, p3, n0, n1, n2, n3, c0, c1, c2, c3 =>
+   write_quad_smooth_vc_uv(buf, idx, p0, p1, p2, p3, n0, n1, n2, n3, c0, c1, c2, c3, geom::vec2(0.0, 0.0), geom::vec2(0.0, 1.0), geom::vec2(1.0, 1.0), geom::vec2(1.0, 0.0))
+
+// Writes a triangle where each vertex has its own analytical smooth normal vector and UVs
+write_tri_smooth_uv: Builder, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, color::Color, geom::Vec2, geom::Vec2, geom::Vec2 => Int
+write_tri_smooth_uv = buf, idx, p0, p1, p2, n0, n1, n2, col, uv0, uv1, uv2 =>
+   write_tri_smooth_vc_uv(buf, idx, p0, p1, p2, n0, n1, n2, col, col, col, uv0, uv1, uv2)
+
+// Writes a smooth quad split into 2 triangles with corner normals and corner UVs
+write_quad_smooth_uv: Builder, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, color::Color, geom::Vec2, geom::Vec2, geom::Vec2, geom::Vec2 => Int
+write_quad_smooth_uv = buf, idx, p0, p1, p2, p3, n0, n1, n2, n3, col, uv0, uv1, uv2, uv3 =>
+   write_quad_smooth_vc_uv(buf, idx, p0, p1, p2, p3, n0, n1, n2, n3, col, col, col, col, uv0, uv1, uv2, uv3)
+
 // Writes a triangle where each vertex has its own analytical smooth normal vector
-write_tri_smooth: Addr, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, color::Color => Int
+write_tri_smooth: Builder, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, color::Color => Int
 write_tri_smooth = buf, idx, p0, p1, p2, n0, n1, n2, col =>
    write_tri_smooth_vc(buf, idx, p0, p1, p2, n0, n1, n2, col, col, col)
 
 // Writes a smooth quad split into 2 triangles with corner normals
-write_quad_smooth: Addr, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, color::Color => Int
+write_quad_smooth: Builder, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, color::Color => Int
 write_quad_smooth = buf, idx, p0, p1, p2, p3, n0, n1, n2, n3, col =>
    write_quad_smooth_vc(buf, idx, p0, p1, p2, p3, n0, n1, n2, n3, col, col, col, col)
 
@@ -56,7 +77,7 @@ SPHERE_DEFAULT_SECTORS  = 24
 SPHERE_DEFAULT_VERTICES = (SPHERE_DEFAULT_RINGS - 1) * SPHERE_DEFAULT_SECTORS * 6
 
 // Generates a UV Sphere with analytical smooth normals
-write_sphere: Addr, Int, Float, Int, Int, (Int => color::Color) => Int
+write_sphere: Builder, Int, Float, Int, Int, (Int => color::Color) => Int
 write_sphere = buf, idx, radius, rings, sectors, color_fn =>
    k' = idx
    face_idx' = 0
@@ -106,13 +127,114 @@ write_sphere = buf, idx, radius, rings, sectors, color_fn =>
             col = color_fn(face_idx')
             face_idx' = face_idx' + 1
 
+            uv00 = geom::vec2(Float(j) / s_flt, Float(i) / r_flt)
+            uv10 = geom::vec2(Float(j) / s_flt, Float(i + 1) / r_flt)
+            uv11 = geom::vec2(Float(j + 1) / s_flt, Float(i + 1) / r_flt)
+            uv01 = geom::vec2(Float(j + 1) / s_flt, Float(i) / r_flt)
+
             // Middle bands & polar fans
-            k' = write_quad_smooth(buf, k', p00, p10, p11, p01, n00, n10, n11, n01, col)
+            k' = write_quad_smooth_uv(buf, k', p00, p10, p11, p01, n00, n10, n11, n01, col, uv00, uv10, uv11, uv01)
    k'
 
-write_sphere_default: Addr, Int, Float, (Int => color::Color) => Int
+write_sphere_default: Builder, Int, Float, (Int => color::Color) => Int
 write_sphere_default = buf, idx, radius, color_fn =>
    write_sphere(buf, idx, radius, SPHERE_DEFAULT_RINGS, SPHERE_DEFAULT_SECTORS, color_fn)
+
+// -----------------------------------------------------------------------------
+// 1b. Icosphere (Geodesic Subdivided Icosahedron — Isotropic Triangulation)
+// -----------------------------------------------------------------------------
+
+ICOSPHERE_DEFAULT_SUBDIVISIONS = 3
+ICOSPHERE_DEFAULT_VERTICES     = 60 * 64 // 20 * 4^3 * 3 = 3840 vertices
+
+// Computes vertex count for an Icosphere with `subdivisions` recursive 4-way splits (20 * 4^subdivisions * 3)
+icosphere_vertex_count: Int => Int
+icosphere_vertex_count = subdivisions =>
+   s = subdivisions < 0 | 0 | subdivisions
+   60 * (1 .<. (s * 2))
+
+// Spherical equirectangular UV coordinates from a unit normal vector `n`
+sphere_uv: geom::Vec3 => geom::Vec2
+sphere_uv = n =>
+   u = (math::atan2(n.z, n.x) / const::tau) + 0.5
+   v = math::acos(%clamp(n.y, -1.0, 1.0)) / const::pi
+   geom::vec2(u, v)
+
+// Recursive geodesic midpoint subdivision of a spherical triangle (n0, n1, n2 on unit sphere)
+write_icosphere_tri: Builder, Int, Int, geom::Vec3, geom::Vec3, geom::Vec3, Float, Int, (Int => color::Color) => (Int, Int)
+write_icosphere_tri = buf, idx, face_idx, n0, n1, n2, radius, depth, color_fn =>
+   depth !> 0
+      |
+         p0  = n0 * radius
+         p1  = n1 * radius
+         p2  = n2 * radius
+         uv0 = sphere_uv(n0)
+         uv1 = sphere_uv(n1)
+         uv2 = sphere_uv(n2)
+         col = color_fn(face_idx)
+         k_next = write_tri_smooth_uv(buf, idx, p0, p1, p2, n0, n1, n2, col, uv0, uv1, uv2)
+         (k_next, face_idx + 1)
+      |
+         m01 = geom::norm3(n0 + n1)
+         m12 = geom::norm3(n1 + n2)
+         m20 = geom::norm3(n2 + n0)
+         d1  = depth - 1
+         r1  = write_icosphere_tri(buf, idx,  face_idx, n0,  m01, m20, radius, d1, color_fn)
+         r2  = write_icosphere_tri(buf, r1.0, r1.1,     m01, n1,  m12, radius, d1, color_fn)
+         r3  = write_icosphere_tri(buf, r2.0, r2.1,     m20, m12, n2,  radius, d1, color_fn)
+         write_icosphere_tri(buf, r3.0, r3.1, m01, m12, m20, radius, d1, color_fn)
+
+// Generates an Icosphere with analytical unit normals and zero polar pinching
+write_icosphere: Builder, Int, Float, Int, (Int => color::Color) => Int
+write_icosphere = buf, idx, radius, subdivisions, color_fn =>
+   a  = 0.5257311121191336
+   b  = 0.8506508083520399
+   na = 0.0 - a
+   nb = 0.0 - b
+
+   // 12 unit vertices of the regular icosahedron
+   v0  = geom::vec3(0.0, na,  b)
+   v1  = geom::vec3(0.0,  a,  b)
+   v2  = geom::vec3(0.0,  a, nb)
+   v3  = geom::vec3(0.0, na, nb)
+   v4  = geom::vec3(na,  b, 0.0)
+   v5  = geom::vec3( a,  b, 0.0)
+   v6  = geom::vec3( a, nb, 0.0)
+   v7  = geom::vec3(na, nb, 0.0)
+   v8  = geom::vec3( b, 0.0, na)
+   v9  = geom::vec3( b, 0.0,  a)
+   v10 = geom::vec3(nb, 0.0,  a)
+   v11 = geom::vec3(nb, 0.0, na)
+
+   s = subdivisions < 0 | 0 | subdivisions
+
+   r1  = write_icosphere_tri(buf, idx,  0,     v0,  v9,  v1,  radius, s, color_fn)
+   r2  = write_icosphere_tri(buf, r1.0, r1.1,  v0,  v1,  v10, radius, s, color_fn)
+   r3  = write_icosphere_tri(buf, r2.0, r2.1,  v0,  v10, v7,  radius, s, color_fn)
+   r4  = write_icosphere_tri(buf, r3.0, r3.1,  v0,  v7,  v6,  radius, s, color_fn)
+   r5  = write_icosphere_tri(buf, r4.0, r4.1,  v0,  v6,  v9,  radius, s, color_fn)
+
+   r6  = write_icosphere_tri(buf, r5.0, r5.1,  v2,  v4,  v5,  radius, s, color_fn)
+   r7  = write_icosphere_tri(buf, r6.0, r6.1,  v2,  v5,  v8,  radius, s, color_fn)
+   r8  = write_icosphere_tri(buf, r7.0, r7.1,  v2,  v8,  v3,  radius, s, color_fn)
+   r9  = write_icosphere_tri(buf, r8.0, r8.1,  v2,  v3,  v11, radius, s, color_fn)
+   r10 = write_icosphere_tri(buf, r9.0, r9.1,  v2,  v11, v4,  radius, s, color_fn)
+
+   r11 = write_icosphere_tri(buf, r10.0, r10.1, v1,  v9,  v5,  radius, s, color_fn)
+   r12 = write_icosphere_tri(buf, r11.0, r11.1, v9,  v8,  v5,  radius, s, color_fn)
+   r13 = write_icosphere_tri(buf, r12.0, r12.1, v9,  v6,  v8,  radius, s, color_fn)
+   r14 = write_icosphere_tri(buf, r13.0, r13.1, v6,  v3,  v8,  radius, s, color_fn)
+   r15 = write_icosphere_tri(buf, r14.0, r14.1, v6,  v7,  v3,  radius, s, color_fn)
+   r16 = write_icosphere_tri(buf, r15.0, r15.1, v7,  v11, v3,  radius, s, color_fn)
+   r17 = write_icosphere_tri(buf, r16.0, r16.1, v7,  v10, v11, radius, s, color_fn)
+   r18 = write_icosphere_tri(buf, r17.0, r17.1, v10, v4,  v11, radius, s, color_fn)
+   r19 = write_icosphere_tri(buf, r18.0, r18.1, v10, v1,  v4,  radius, s, color_fn)
+   r20 = write_icosphere_tri(buf, r19.0, r19.1, v1,  v5,  v4,  radius, s, color_fn)
+   r20.0
+
+write_icosphere_default: Builder, Int, Float, (Int => color::Color) => Int
+write_icosphere_default = buf, idx, radius, color_fn =>
+   write_icosphere(buf, idx, radius, ICOSPHERE_DEFAULT_SUBDIVISIONS, color_fn)
 
 // -----------------------------------------------------------------------------
 // 2. Cylinder
@@ -129,7 +251,7 @@ CYLINDER_DEFAULT_SEGMENTS = 24
 CYLINDER_DEFAULT_VERTICES = CYLINDER_DEFAULT_SEGMENTS * 12
 
 // Generates a Cylinder with analytical radial normals on walls and flat cap normals
-write_cylinder: Addr, Int, Float, Float, Int, <>, (Int => color::Color) => Int
+write_cylinder: Builder, Int, Float, Float, Int, <>, (Int => color::Color) => Int
 write_cylinder = buf, idx, radius, height, segments, capped, color_fn =>
    k' = idx
    face_idx' = 0
@@ -162,7 +284,9 @@ write_cylinder = buf, idx, radius, height, segments, capped, color_fn =>
       col = color_fn(face_idx')
       face_idx' = face_idx' + 1
 
-      k' = write_quad_smooth(buf, k', t0, b0, b1, t1, nt0, nb0, nb1, nt1, col)
+      u0 = Float(j) / s_flt
+      u1 = Float(j + 1) / s_flt
+      k' = write_quad_smooth_uv(buf, k', t0, b0, b1, t1, nt0, nb0, nb1, nt1, col, geom::vec2(u0, 0.0), geom::vec2(u0, 1.0), geom::vec2(u1, 1.0), geom::vec2(u1, 0.0))
 
    // 2. Optional End Caps
    capped |
@@ -170,6 +294,7 @@ write_cylinder = buf, idx, radius, height, segments, capped, color_fn =>
       norm_top   = geom::vec3(0.0, 1.0, 0.0)
       center_bot = geom::vec3(0.0, nhalf_h, 0.0)
       norm_bot   = geom::vec3(0.0, -1.0, 0.0)
+      uv_center  = geom::vec2(0.5, 0.5)
 
       segments @ j =>
          phi0 = (Float(j) * const::tau) / s_flt
@@ -180,22 +305,25 @@ write_cylinder = buf, idx, radius, height, segments, capped, color_fn =>
          c1 = %cos(phi1)
          s1 = %sin(phi1)
 
+         uv0 = geom::vec2((c0 + 1.0) * 0.5, (s0 + 1.0) * 0.5)
+         uv1 = geom::vec2((c1 + 1.0) * 0.5, (s1 + 1.0) * 0.5)
+
          // Top cap triangle
          t0 = geom::vec3(radius * c0, half_h, radius * s0)
          t1 = geom::vec3(radius * c1, half_h, radius * s1)
          col_top = color_fn(face_idx')
          face_idx' = face_idx' + 1
-         k' = write_tri_smooth(buf, k', center_top, t0, t1, norm_top, norm_top, norm_top, col_top)
+         k' = write_tri_smooth_uv(buf, k', center_top, t0, t1, norm_top, norm_top, norm_top, col_top, uv_center, uv0, uv1)
 
          // Bottom cap triangle
          b0 = geom::vec3(radius * c0, nhalf_h, radius * s0)
          b1 = geom::vec3(radius * c1, nhalf_h, radius * s1)
          col_bot = color_fn(face_idx')
          face_idx' = face_idx' + 1
-         k' = write_tri_smooth(buf, k', center_bot, b1, b0, norm_bot, norm_bot, norm_bot, col_bot)
+         k' = write_tri_smooth_uv(buf, k', center_bot, b1, b0, norm_bot, norm_bot, norm_bot, col_bot, uv_center, uv1, uv0)
    k'
 
-write_cylinder_default: Addr, Int, Float, Float, (Int => color::Color) => Int
+write_cylinder_default: Builder, Int, Float, Float, (Int => color::Color) => Int
 write_cylinder_default = buf, idx, radius, height, color_fn =>
    write_cylinder(buf, idx, radius, height, CYLINDER_DEFAULT_SEGMENTS, <+>, color_fn)
 
@@ -214,7 +342,7 @@ CONE_DEFAULT_SEGMENTS = 24
 CONE_DEFAULT_VERTICES = CONE_DEFAULT_SEGMENTS * 6
 
 // Generates a Cone with analytical surface normals and base cap
-write_cone: Addr, Int, Float, Float, Int, <>, (Int => color::Color) => Int
+write_cone: Builder, Int, Float, Float, Int, <>, (Int => color::Color) => Int
 write_cone = buf, idx, radius, height, segments, capped, color_fn =>
    k' = idx
    face_idx' = 0
@@ -253,12 +381,15 @@ write_cone = buf, idx, radius, height, segments, capped, color_fn =>
       col = color_fn(face_idx')
       face_idx' = face_idx' + 1
 
-      k' = write_tri_smooth(buf, k', apex, b0, b1, na, n0, n1, col)
+      u0 = Float(j) / s_flt
+      u1 = Float(j + 1) / s_flt
+      k' = write_tri_smooth_uv(buf, k', apex, b0, b1, na, n0, n1, col, geom::vec2((u0 + u1) * 0.5, 0.0), geom::vec2(u0, 1.0), geom::vec2(u1, 1.0))
 
    // 2. Base Cap
    capped |
       center_bot = geom::vec3(0.0, nhalf_h, 0.0)
       norm_bot   = geom::vec3(0.0, -1.0, 0.0)
+      uv_center  = geom::vec2(0.5, 0.5)
 
       segments @ j =>
          phi0 = (Float(j) * const::tau) / s_flt
@@ -275,10 +406,12 @@ write_cone = buf, idx, radius, height, segments, capped, color_fn =>
          col_base = color_fn(face_idx')
          face_idx' = face_idx' + 1
 
-         k' = write_tri_smooth(buf, k', center_bot, b1, b0, norm_bot, norm_bot, norm_bot, col_base)
+         uv0 = geom::vec2((c0 + 1.0) * 0.5, (s0 + 1.0) * 0.5)
+         uv1 = geom::vec2((c1 + 1.0) * 0.5, (s1 + 1.0) * 0.5)
+         k' = write_tri_smooth_uv(buf, k', center_bot, b1, b0, norm_bot, norm_bot, norm_bot, col_base, uv_center, uv1, uv0)
    k'
 
-write_cone_default: Addr, Int, Float, Float, (Int => color::Color) => Int
+write_cone_default: Builder, Int, Float, Float, (Int => color::Color) => Int
 write_cone_default = buf, idx, radius, height, color_fn =>
    write_cone(buf, idx, radius, height, CONE_DEFAULT_SEGMENTS, <+>, color_fn)
 
@@ -296,7 +429,7 @@ TORUS_DEFAULT_TUBULAR  = 24
 TORUS_DEFAULT_VERTICES = TORUS_DEFAULT_RADIAL * TORUS_DEFAULT_TUBULAR * 6
 
 // Generates a Torus with exact analytical surface normals
-write_torus: Addr, Int, Float, Float, Int, Int, (Int => color::Color) => Int
+write_torus: Builder, Int, Float, Float, Int, Int, (Int => color::Color) => Int
 write_torus = buf, idx, major_r, minor_r, radial_segs, tubular_segs, color_fn =>
    k' = idx
    face_idx' = 0
@@ -340,10 +473,15 @@ write_torus = buf, idx, major_r, minor_r, radial_segs, tubular_segs, color_fn =>
          col = color_fn(face_idx')
          face_idx' = face_idx' + 1
 
-         k' = write_quad_smooth(buf, k', p00, p10, p11, p01, n00, n10, n11, n01, col)
+         uv00 = geom::vec2(Float(j) / tub_flt, Float(i) / rad_flt)
+         uv10 = geom::vec2(Float(j) / tub_flt, Float(i + 1) / rad_flt)
+         uv11 = geom::vec2(Float(j + 1) / tub_flt, Float(i + 1) / rad_flt)
+         uv01 = geom::vec2(Float(j + 1) / tub_flt, Float(i) / rad_flt)
+
+         k' = write_quad_smooth_uv(buf, k', p00, p10, p11, p01, n00, n10, n11, n01, col, uv00, uv10, uv11, uv01)
    k'
 
-write_torus_default: Addr, Int, Float, Float, (Int => color::Color) => Int
+write_torus_default: Builder, Int, Float, Float, (Int => color::Color) => Int
 write_torus_default = buf, idx, major_r, minor_r, color_fn =>
    write_torus(buf, idx, major_r, minor_r, TORUS_DEFAULT_RADIAL, TORUS_DEFAULT_TUBULAR, color_fn)
 
@@ -379,7 +517,7 @@ filament_vertex_count = num_points, segments, capped =>
 // Generates a 3D Filament swept along `spine` (`< geom::Vec3{} | (Float => geom::Vec3) >`)
 // with `num_points` curve samples (used when `spine` is a parametric function),
 // polar cross-section `radius_fn(angle, dist_from_base)`, and color `color_fn(angle, dist_from_base)`
-write_filament: Addr, Int, curve::FilamentSpine, Int, (Float, Float => Float), Int, <>, (Float, Float => color::Color) => Int
+write_filament: Builder, Int, curve::FilamentSpine, Int, (Float, Float => Float), Int, <>, (Float, Float => color::Color) => Int
 write_filament = buf, idx, spine, num_points, radius_fn, segments, capped, color_fn =>
    pts = curve::resolve_spine(spine, num_points)
    n_pts = ?pts
@@ -387,6 +525,7 @@ write_filament = buf, idx, spine, num_points, radius_fn, segments, capped, color
 
    k' = idx
    s_flt = Float(segments)
+   n_flt = Float(n_pts - 1)
 
    // Initial orthonormal frame (t0, n0, b0) at base of filament (dist = 0.0)
    t0 = curve::curve_tangent(pts, n_pts, 0)
@@ -429,6 +568,9 @@ write_filament = buf, idx, spine, num_points, radius_fn, segments, capped, color
       n_next = frame_next(0)
       b_next = frame_next(1)
 
+      v_curr = Float(i) / n_flt
+      v_next = Float(i + 1) / n_flt
+
       segments @ j =>
          phi0 = (Float(j) * const::tau) / s_flt
          phi1 = (Float(j + 1) * const::tau) / s_flt
@@ -462,7 +604,14 @@ write_filament = buf, idx, spine, num_points, radius_fn, segments, capped, color
          col11 = color_fn(phi1, dist_next)
          col10 = color_fn(phi0, dist_next)
 
-         k' = write_quad_smooth_vc(buf, k', p00, p01, p11, p10, n00, n01, n11, n10, col00, col01, col11, col10)
+         u0 = Float(j) / s_flt
+         u1 = Float(j + 1) / s_flt
+         uv00 = geom::vec2(u0, v_curr)
+         uv01 = geom::vec2(u1, v_curr)
+         uv11 = geom::vec2(u1, v_next)
+         uv10 = geom::vec2(u0, v_next)
+
+         k' = write_quad_smooth_vc_uv(buf, k', p00, p01, p11, p10, n00, n01, n11, n10, col00, col01, col11, col10, uv00, uv01, uv11, uv10)
 
       t_curr' = t_next
       n_curr' = n_next
@@ -489,7 +638,7 @@ write_filament = buf, idx, spine, num_points, radius_fn, segments, capped, color
 
    k'
 
-write_filament_default: Addr, Int, curve::FilamentSpine, (Float, Float => Float),
+write_filament_default: Builder, Int, curve::FilamentSpine, (Float, Float => Float),
    (Float, Float => color::Color) => Int
 write_filament_default = buf, idx, spine, radius_fn, color_fn =>
    write_filament(buf, idx, spine, FILAMENT_DEFAULT_POINTS, radius_fn, FILAMENT_DEFAULT_SEGMENTS, <+>, color_fn)

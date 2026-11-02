@@ -2,7 +2,6 @@
 
 #use "math/geom"
 #use color
-#use "palette"
 #use "vertex"
 #use "polyhedra"
 #use "curved"
@@ -10,7 +9,6 @@
 #public
 
 // Core Record Types
-#type Color color::Color
 #type Point geom::Vec3
 #type Vec3  geom::Vec3
 #type Vertex vertex::Vertex
@@ -18,7 +16,10 @@
 #type FilamentSpine curved::FilamentSpine
 
 // Vertex Layout Constants & Mesh Slice Helper
-VERTEX_STRIDE = 40
+VERTEX_STRIDE = vertex::VERTEX_STRIDE
+
+vertex_buffer: Int => Builder
+vertex_buffer = max_vertices => vertex::vertex_buffer(max_vertices)
 
 mesh: Int, Int => vertex::Mesh
 mesh = start, end_idx => vertex::mesh(start, end_idx)
@@ -33,95 +34,25 @@ PLANE_VERTICES        = 6
 STAR_VERTICES         = 12
 
 // Default Vertex Counts for Curved Parametric Shapes
-SPHERE_DEFAULT_VERTICES   = curved::SPHERE_DEFAULT_VERTICES
-CYLINDER_DEFAULT_VERTICES = curved::CYLINDER_DEFAULT_VERTICES
-CONE_DEFAULT_VERTICES     = curved::CONE_DEFAULT_VERTICES
-TORUS_DEFAULT_VERTICES    = curved::TORUS_DEFAULT_VERTICES
+SPHERE_DEFAULT_VERTICES    = curved::SPHERE_DEFAULT_VERTICES
+ICOSPHERE_DEFAULT_VERTICES = curved::ICOSPHERE_DEFAULT_VERTICES
+CYLINDER_DEFAULT_VERTICES  = curved::CYLINDER_DEFAULT_VERTICES
+CONE_DEFAULT_VERTICES      = curved::CONE_DEFAULT_VERTICES
+TORUS_DEFAULT_VERTICES     = curved::TORUS_DEFAULT_VERTICES
 
-// Constructors
-color: Float, Float, Float => color::Color
-color = r, g, b => color::rgb(r, g, b)
-
-color_rgba: Float, Float, Float, Float => color::Color
-color_rgba = r, g, b, a => color::rgba(r, g, b, a)
-
-color_hex: Int => color::Color
-color_hex = h => color::from_hex_rgb(h)
-
+// 3D Point / Vector Constructors
 pt: Float, Float, Float => geom::Vec3
 pt = x, y, z => geom::vec3(x, y, z)
 
 vec3: Float, Float, Float => geom::Vec3
 vec3 = x, y, z => geom::vec3(x, y, z)
 
-// Standard Base Colors (from std/color)
-white     = color::white
-black     = color::black
-red       = color::red
-orange    = color::orange
-yellow    = color::yellow
-green     = color::green
-cyan      = color::cyan
-blue      = color::blue
-violet    = color::violet
-magenta   = color::magenta
-amber     = color::amber
-emerald   = color::emerald
-ruby      = color::ruby
-sapphire  = color::sapphire
-turquoise = color::turquoise
-slate     = color::slate
-
-// Color Providers (General from std/color)
-with_alpha: color::Color, Float => color::Color
-with_alpha = c, a => color::with_alpha(c, a)
-
-glass: (Int => color::Color), Float => (Int => color::Color)
-glass = fn, a => color::glass(fn, a)
-
-gradient: color::Color, color::Color => (Float => color::Color)
-gradient = c1, c2 => color::gradient(c1, c2)
-
-gradient_oklab: color::Color, color::Color => (Float => color::Color)
-gradient_oklab = c1, c2 => color::gradient_oklab(c1, c2)
-
-uniform: color::Color => (Int => color::Color)
-uniform = c => color::uniform(c)
-
-stripes: color::Color, color::Color => (Int => color::Color)
-stripes = c1, c2 => color::stripes(c1, c2)
-
-rainbow: Int => color::Color
-rainbow = i => color::rainbow(i)
-
-warm: Int => color::Color
-warm = i => color::warm(i)
-
-cool: Int => color::Color
-cool = i => color::cool(i)
-
-// 3D Mesh Face Palette Providers (from palette)
-cube_default: Int => color::Color
-cube_default = i => palette::cube_default(i)
-
-octahedron_default: Int => color::Color
-octahedron_default = i => palette::octahedron_default(i)
-
-tetrahedron_default: Int => color::Color
-tetrahedron_default = i => palette::tetrahedron_default(i)
-
-dodecahedron_default: Int => color::Color
-dodecahedron_default = i => palette::dodecahedron_default(i)
-
-icosahedron_default: Int => color::Color
-icosahedron_default = i => palette::icosahedron_default(i)
-
-curved_default: Int => color::Color
-curved_default = i => palette::curved_default(i)
-
 // Curved Parametric Vertex Count Calculators
 sphere_vertex_count: Int, Int => Int
 sphere_vertex_count = r, s => curved::sphere_vertex_count(r, s)
+
+icosphere_vertex_count: Int => Int
+icosphere_vertex_count = subdivs => curved::icosphere_vertex_count(subdivs)
 
 cylinder_vertex_count: Int, <> => Int
 cylinder_vertex_count = s, c => curved::cylinder_vertex_count(s, c)
@@ -136,16 +67,19 @@ filament_vertex_count: Int, Int, <> => Int
 filament_vertex_count = n_pts, segs, cap => curved::filament_vertex_count(n_pts, segs, cap)
 
 // Curved Parametric Shape Builders (Flexible Resolution)
-write_sphere: Addr, Int, Float, Int, Int, (Int => color::Color) => Int
+write_sphere: Builder, Int, Float, Int, Int, (Int => color::Color) => Int
 write_sphere = buf, idx, rad, rings, secs, col => curved::write_sphere(buf, idx, rad, rings, secs, col)
 
-write_cylinder: Addr, Int, Float, Float, Int, <>, (Int => color::Color) => Int
+write_icosphere: Builder, Int, Float, Int, (Int => color::Color) => Int
+write_icosphere = buf, idx, rad, subdivs, col => curved::write_icosphere(buf, idx, rad, subdivs, col)
+
+write_cylinder: Builder, Int, Float, Float, Int, <>, (Int => color::Color) => Int
 write_cylinder = buf, idx, rad, h, segs, cap, col => curved::write_cylinder(buf, idx, rad, h, segs, cap, col)
 
-write_cone: Addr, Int, Float, Float, Int, <>, (Int => color::Color) => Int
+write_cone: Builder, Int, Float, Float, Int, <>, (Int => color::Color) => Int
 write_cone = buf, idx, rad, h, segs, cap, col => curved::write_cone(buf, idx, rad, h, segs, cap, col)
 
-write_torus: Addr, Int, Float, Float, Int, Int, (Int => color::Color) => Int
+write_torus: Builder, Int, Float, Float, Int, Int, (Int => color::Color) => Int
 write_torus = buf, idx, r_maj, r_min, rad, tub, col => curved::write_torus(buf, idx, r_maj, r_min, rad, tub, col)
 
 const_radius: Float => (Float, Float => Float)
@@ -157,44 +91,47 @@ spine_points = pts => curved::spine_points(pts)
 spine_curve: (Float => geom::Vec3) => curved::FilamentSpine
 spine_curve = fn => curved::spine_curve(fn)
 
-write_filament: Addr, Int, curved::FilamentSpine, Int, (Float, Float => Float), Int, <>, (Float, Float => color::Color) => Int
+write_filament: Builder, Int, curved::FilamentSpine, Int, (Float, Float => Float), Int, <>, (Float, Float => color::Color) => Int
 write_filament = buf, idx, spine, num_pts, rad_fn, segs, cap, col => curved::write_filament(buf, idx, spine, num_pts, rad_fn, segs, cap, col)
 
 // Curved Parametric Shape Builders (Default Presets)
-write_sphere_default: Addr, Int, Float, (Int => color::Color) => Int
+write_sphere_default: Builder, Int, Float, (Int => color::Color) => Int
 write_sphere_default = buf, idx, rad, col => curved::write_sphere_default(buf, idx, rad, col)
 
-write_cylinder_default: Addr, Int, Float, Float, (Int => color::Color) => Int
+write_icosphere_default: Builder, Int, Float, (Int => color::Color) => Int
+write_icosphere_default = buf, idx, rad, col => curved::write_icosphere_default(buf, idx, rad, col)
+
+write_cylinder_default: Builder, Int, Float, Float, (Int => color::Color) => Int
 write_cylinder_default = buf, idx, rad, h, col => curved::write_cylinder_default(buf, idx, rad, h, col)
 
-write_cone_default: Addr, Int, Float, Float, (Int => color::Color) => Int
+write_cone_default: Builder, Int, Float, Float, (Int => color::Color) => Int
 write_cone_default = buf, idx, rad, h, col => curved::write_cone_default(buf, idx, rad, h, col)
 
-write_torus_default: Addr, Int, Float, Float, (Int => color::Color) => Int
+write_torus_default: Builder, Int, Float, Float, (Int => color::Color) => Int
 write_torus_default = buf, idx, r_maj, r_min, col => curved::write_torus_default(buf, idx, r_maj, r_min, col)
 
-write_filament_default: Addr, Int, curved::FilamentSpine, (Float, Float => Float), (Float, Float => color::Color) => Int
+write_filament_default: Builder, Int, curved::FilamentSpine, (Float, Float => Float), (Float, Float => color::Color) => Int
 write_filament_default = buf, idx, spine, rad_fn, col => curved::write_filament_default(buf, idx, spine, rad_fn, col)
 
 // Uniform Geometry Builders
-write_tetrahedron: Addr, Int, Float, (Int => color::Color) => Int
+write_tetrahedron: Builder, Int, Float, (Int => color::Color) => Int
 write_tetrahedron = buf, idx, s, c => polyhedra::write_tetrahedron(buf, idx, s, c)
 
-write_cube: Addr, Int, Float, (Int => color::Color) => Int
+write_cube: Builder, Int, Float, (Int => color::Color) => Int
 write_cube = buf, idx, s, c => polyhedra::write_cube(buf, idx, s, c)
 
-write_octahedron: Addr, Int, Float, (Int => color::Color) => Int
+write_octahedron: Builder, Int, Float, (Int => color::Color) => Int
 write_octahedron = buf, idx, s, c => polyhedra::write_octahedron(buf, idx, s, c)
 
-write_icosahedron: Addr, Int, Float, (Int => color::Color) => Int
+write_icosahedron: Builder, Int, Float, (Int => color::Color) => Int
 write_icosahedron = buf, idx, s, c => polyhedra::write_icosahedron(buf, idx, s, c)
 
-write_dodecahedron: Addr, Int, Float, (Int => color::Color) => Int
+write_dodecahedron: Builder, Int, Float, (Int => color::Color) => Int
 write_dodecahedron = buf, idx, s, c => polyhedra::write_dodecahedron(buf, idx, s, c)
 
 // Planar Builders
-write_plane: Addr, Int, Float, Float, color::Color => Int
+write_plane: Builder, Int, Float, Float, color::Color => Int
 write_plane = buf, idx, w, h, col => polyhedra::write_plane(buf, idx, w, h, col)
 
-write_star_base: Addr, Int, color::Color, color::Color => Int
+write_star_base: Builder, Int, color::Color, color::Color => Int
 write_star_base = buf, idx, c1, c2 => polyhedra::write_star_base(buf, idx, c1, c2)

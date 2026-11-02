@@ -1,14 +1,10 @@
 // shapes/tests/test_shapes.dva — Test suite for 3D shapes library
 #use io
 #use "math/geom"
-#use "../src/shapes"
 #use color
-#use "../src/vertex"
-#use "../src/polyhedra"
-
-#foreign "c"
-   malloc: (size: Int) => Addr
-   free: (ptr: Addr) => ()
+#use "../src/shapes"
+#use "../src/palette"
+#use "../src/texture"
 
 approx_eq = a, b => %abs(a - b) < 0.0001
 assert_flag = msg, f =>
@@ -19,18 +15,18 @@ assert_flag = msg, f =>
 main: () => ()
 main = !=>
    // 1. Color and Hex Tests
-   c_hex = shapes::color_hex(0xFF8000)
+   c_hex = color::from_hex_rgb(0xFF8000)
    assert_flag("hex red ~ 1.0", approx_eq(c_hex.r, 1.0))
    assert_flag("hex green ~ 0.5019", approx_eq(c_hex.g, 128.0 / 255.0))
    assert_flag("hex blue ~ 0.0", approx_eq(c_hex.b, 0.0))
 
    // 2. Uniform & Glass Color Providers
-   u_fn = shapes::uniform(color::emerald)
+   u_fn = color::uniform(color::emerald)
    c0 = u_fn(0)
    c15 = u_fn(15)
    assert_flag("uniform c0 == c15", approx_eq(c0.r, c15.r) && approx_eq(c0.g, c15.g) && approx_eq(c0.b, c15.b) && approx_eq(c0.a, 1.0))
 
-   g_fn = shapes::glass(shapes::rainbow, 0.5)
+   g_fn = color::glass(color::rainbow, 0.5)
    cg0 = g_fn(0)
    assert_flag("glass alpha == 0.5", approx_eq(cg0.a, 0.5) && approx_eq(cg0.r, color::red.r))
 
@@ -42,59 +38,62 @@ main = !=>
    assert_flag("normal3 +Z normal", approx_eq(norm.x, 0.0) && approx_eq(norm.y, 0.0) && approx_eq(norm.z, 1.0))
 
    // 4. Polyhedra Builders
-   buf = malloc(512 * shapes::VERTEX_STRIDE)
+   buf = shapes::vertex_buffer(512)
 
    // Tetrahedron
-   k1 = shapes::write_tetrahedron(buf, 0, 2.0, shapes::tetrahedron_default)
+   k1 = shapes::write_tetrahedron(buf, 0, 2.0, palette::tetrahedron)
    assert_flag("tetrahedron vertex count", k1 == shapes::TETRAHEDRON_VERTICES)
 
    // Cube
-   k2 = shapes::write_cube(buf, 0, 2.0, shapes::cube_default)
+   k2 = shapes::write_cube(buf, 0, 2.0, palette::cube)
    assert_flag("cube vertex count", k2 == shapes::CUBE_VERTICES)
 
    // Octahedron
-   k3 = shapes::write_octahedron(buf, 0, 2.0, shapes::octahedron_default)
+   k3 = shapes::write_octahedron(buf, 0, 2.0, palette::octahedron)
    assert_flag("octahedron vertex count", k3 == shapes::OCTAHEDRON_VERTICES)
 
    // Dodecahedron
-   k4 = shapes::write_dodecahedron(buf, 0, 2.0, shapes::dodecahedron_default)
+   k4 = shapes::write_dodecahedron(buf, 0, 2.0, palette::dodecahedron)
    assert_flag("dodecahedron vertex count", k4 == shapes::DODECAHEDRON_VERTICES)
 
    // Icosahedron
-   k5 = shapes::write_icosahedron(buf, 0, 2.0, shapes::icosahedron_default)
+   k5 = shapes::write_icosahedron(buf, 0, 2.0, palette::icosahedron)
    assert_flag("icosahedron vertex count", k5 == shapes::ICOSAHEDRON_VERTICES)
 
    // Plane
    k6 = shapes::write_plane(buf, 0, 5.0, 5.0, color::slate)
    assert_flag("plane vertex count", k6 == shapes::PLANE_VERTICES)
 
-   free(buf)
-
    // 5. Curved Parametric Shapes
-   buf_curved = malloc(4096 * shapes::VERTEX_STRIDE)
+   buf_curved = shapes::vertex_buffer(4096)
 
-   // UV Sphere
+   // UV Sphere & Icosphere
    v_sphere = shapes::sphere_vertex_count(12, 24)
    assert_flag("sphere vertex count formula", v_sphere == shapes::SPHERE_DEFAULT_VERTICES)
-   k_sph = shapes::write_sphere_default(buf_curved, 0, 1.5, shapes::curved_default)
+   k_sph = shapes::write_sphere_default(buf_curved, 0, 1.5, palette::curved)
    assert_flag("write_sphere_default count", k_sph == shapes::SPHERE_DEFAULT_VERTICES)
+
+   v_ico_sph = shapes::icosphere_vertex_count(3)
+   assert_flag("icosphere vertex count formula", v_ico_sph == shapes::ICOSPHERE_DEFAULT_VERTICES)
+   k_ico_sph = shapes::write_icosphere_default(buf_curved, 0, 1.5, palette::curved)
+   assert_flag("write_icosphere_default count", k_ico_sph == shapes::ICOSPHERE_DEFAULT_VERTICES)
 
    // Cylinder
    v_cyl = shapes::cylinder_vertex_count(24, <+>)
    assert_flag("cylinder vertex count formula", v_cyl == shapes::CYLINDER_DEFAULT_VERTICES)
-   k_cyl = shapes::write_cylinder_default(buf_curved, 0, 1.0, 2.5, shapes::curved_default)
+   k_cyl = shapes::write_cylinder_default(buf_curved, 0, 1.0, 2.5, palette::curved)
    assert_flag("write_cylinder_default count", k_cyl == shapes::CYLINDER_DEFAULT_VERTICES)
 
    // Cone
    v_cone = shapes::cone_vertex_count(24, <+>)
    assert_flag("cone vertex count formula", v_cone == shapes::CONE_DEFAULT_VERTICES)
-   k_cone = shapes::write_cone_default(buf_curved, 0, 1.0, 2.0, shapes::curved_default)
+   k_cone = shapes::write_cone_default(buf_curved, 0, 1.0, 2.0, palette::curved)
    assert_flag("write_cone_default count", k_cone == shapes::CONE_DEFAULT_VERTICES)
 
    // Torus
    v_torus = shapes::torus_vertex_count(16, 24)
    assert_flag("torus vertex count formula", v_torus == shapes::TORUS_DEFAULT_VERTICES)
-   k_torus = shapes::write_torus_default(buf_curved, 0, 1.8, 0.5, shapes::curved_default)
+   k_torus = shapes::write_torus_default(buf_curved, 0, 1.8, 0.5, palette::curved)
    assert_flag("write_torus_default count", k_torus == shapes::TORUS_DEFAULT_VERTICES)
 
    // Filament (3D Curve with Polar Cross-Section r = f(angle, dist))
@@ -117,7 +116,17 @@ main = !=>
    k_fil_curve = shapes::write_filament(buf_curved, 0, <- curve_fn +>, 4, shapes::const_radius(0.15), 24, <->, fil_col_fn)
    assert_flag("write_filament (curve fn) count", k_fil_curve == v_fil_uncap)
 
-   free(buf_curved)
+   // 6. Procedural 2D Textures
+   tex_chk = texture::generate(16, 16, texture::checkerboard(4, color::white, color::black))
+   assert_flag("texture dimensions 16x16", tex_chk.width == 16 && tex_chk.height == 16)
+   assert_flag("texture RGBA8 byte length", ?tex_chk.pixels == 16 * 16 * 4)
+
+   tex_marble = texture::generate(8, 8, texture::marble(color::cyan, color::sapphire, 2.0))
+   assert_flag("marble texture byte length", ?tex_marble.pixels == 8 * 8 * 4)
+
+   tex_chrome = texture::generate(16, 16, texture::chrome!)
+   assert_flag("reflective chrome texture byte length", ?tex_chrome.pixels == 16 * 16 * 4)
+
    io::out("All shapes tests completed successfully.")
 
 main!

@@ -19,56 +19,56 @@ PLANE_VERTICES        = 6    // 1 quad * 2 triangles * 3 vertices
 STAR_VERTICES         = 12   // 4 triangles * 3 vertices
 
 // -----------------------------------------------------------------------------
-// Low-Level Surface Writers (Writes into 9-float vertex buffers)
+// Low-Level Surface Writers (Writes into 12-float vertex buffers with UV coords)
 // -----------------------------------------------------------------------------
 
-// Writes a single flat-shaded triangle with auto-computed surface normal
-write_tri: Addr, Int, geom::Vec3, geom::Vec3, geom::Vec3, color::Color => Int
+// Writes a single flat-shaded triangle with auto-computed surface normal and canonical UVs
+write_tri: Builder, Int, geom::Vec3, geom::Vec3, geom::Vec3, color::Color => Int
 write_tri = buf, idx, a, b, c, col =>
    norm = geom::normal3(a, b, c)
-   vertex::write_vertex(buf, idx + 0, vertex::vertex(a.x, a.y, a.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
-   vertex::write_vertex(buf, idx + 1, vertex::vertex(b.x, b.y, b.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
-   vertex::write_vertex(buf, idx + 2, vertex::vertex(c.x, c.y, c.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
+   vertex::write_vertex(buf, idx + 0, vertex::vertex_uv(a.x, a.y, a.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z, 0.0, 0.0))
+   vertex::write_vertex(buf, idx + 1, vertex::vertex_uv(b.x, b.y, b.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z, 1.0, 0.0))
+   vertex::write_vertex(buf, idx + 2, vertex::vertex_uv(c.x, c.y, c.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z, 0.5, 1.0))
    idx + 3
 
-// Writes a triangle with per-vertex colors and an explicit normal vector
-write_tri_shaded: Addr, Int, geom::Vec3, geom::Vec3, geom::Vec3, color::Color, color::Color, color::Color, geom::Vec3 => Int
+// Writes a triangle with per-vertex colors, explicit normal vector, and radial UVs
+write_tri_shaded: Builder, Int, geom::Vec3, geom::Vec3, geom::Vec3, color::Color, color::Color, color::Color, geom::Vec3 => Int
 write_tri_shaded = buf, idx, a, b, c, ca, cb, cc, norm =>
-   vertex::write_vertex(buf, idx + 0, vertex::vertex(a.x, a.y, a.z, ca.r, ca.g, ca.b, ca.a, norm.x, norm.y, norm.z))
-   vertex::write_vertex(buf, idx + 1, vertex::vertex(b.x, b.y, b.z, cb.r, cb.g, cb.b, cb.a, norm.x, norm.y, norm.z))
-   vertex::write_vertex(buf, idx + 2, vertex::vertex(c.x, c.y, c.z, cc.r, cc.g, cc.b, cc.a, norm.x, norm.y, norm.z))
+   vertex::write_vertex(buf, idx + 0, vertex::vertex_uv(a.x, a.y, a.z, ca.r, ca.g, ca.b, ca.a, norm.x, norm.y, norm.z, 0.5, 0.5))
+   vertex::write_vertex(buf, idx + 1, vertex::vertex_uv(b.x, b.y, b.z, cb.r, cb.g, cb.b, cb.a, norm.x, norm.y, norm.z, 1.0, 0.0))
+   vertex::write_vertex(buf, idx + 2, vertex::vertex_uv(c.x, c.y, c.z, cc.r, cc.g, cc.b, cc.a, norm.x, norm.y, norm.z, 0.0, 1.0))
    idx + 3
 
-// Writes a planar quad (6 vertices: 2 triangles) with auto-computed surface normal
-write_quad_face: Addr, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, color::Color => Int
+// Writes a planar quad (6 vertices: 2 triangles) with auto-computed surface normal and unit [0,1]^2 UVs
+write_quad_face: Builder, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, color::Color => Int
 write_quad_face = buf, idx, a, b, c, d, col =>
    norm = geom::normal3(a, b, c)
-   // Triangle 1: a -> b -> c
-   vertex::write_vertex(buf, idx + 0, vertex::vertex(a.x, a.y, a.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
-   vertex::write_vertex(buf, idx + 1, vertex::vertex(b.x, b.y, b.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
-   vertex::write_vertex(buf, idx + 2, vertex::vertex(c.x, c.y, c.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
-   // Triangle 2: a -> c -> d
-   vertex::write_vertex(buf, idx + 3, vertex::vertex(a.x, a.y, a.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
-   vertex::write_vertex(buf, idx + 4, vertex::vertex(c.x, c.y, c.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
-   vertex::write_vertex(buf, idx + 5, vertex::vertex(d.x, d.y, d.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
+   // Triangle 1: a(0,0) -> b(0,1) -> c(1,1)
+   vertex::write_vertex(buf, idx + 0, vertex::vertex_uv(a.x, a.y, a.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z, 0.0, 0.0))
+   vertex::write_vertex(buf, idx + 1, vertex::vertex_uv(b.x, b.y, b.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z, 0.0, 1.0))
+   vertex::write_vertex(buf, idx + 2, vertex::vertex_uv(c.x, c.y, c.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z, 1.0, 1.0))
+   // Triangle 2: a(0,0) -> c(1,1) -> d(1,0)
+   vertex::write_vertex(buf, idx + 3, vertex::vertex_uv(a.x, a.y, a.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z, 0.0, 0.0))
+   vertex::write_vertex(buf, idx + 4, vertex::vertex_uv(c.x, c.y, c.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z, 1.0, 1.0))
+   vertex::write_vertex(buf, idx + 5, vertex::vertex_uv(d.x, d.y, d.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z, 1.0, 0.0))
    idx + 6
 
-// Writes a regular pentagon face (9 vertices: 3 triangles radiating from p0) with shared normal
-write_pentagon_face: Addr, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, color::Color => Int
+// Writes a regular pentagon face (9 vertices: 3 triangles radiating from p0) with shared normal and inscribed UVs
+write_pentagon_face: Builder, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, color::Color => Int
 write_pentagon_face = buf, idx, p0, p1, p2, p3, p4, col =>
    norm = geom::normal3(p0, p1, p2)
    // Triangle 1: p0 -> p1 -> p2
-   vertex::write_vertex(buf, idx + 0, vertex::vertex(p0.x, p0.y, p0.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
-   vertex::write_vertex(buf, idx + 1, vertex::vertex(p1.x, p1.y, p1.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
-   vertex::write_vertex(buf, idx + 2, vertex::vertex(p2.x, p2.y, p2.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
+   vertex::write_vertex(buf, idx + 0, vertex::vertex_uv(p0.x, p0.y, p0.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z, 0.50, 0.00))
+   vertex::write_vertex(buf, idx + 1, vertex::vertex_uv(p1.x, p1.y, p1.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z, 0.98, 0.35))
+   vertex::write_vertex(buf, idx + 2, vertex::vertex_uv(p2.x, p2.y, p2.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z, 0.79, 0.90))
    // Triangle 2: p0 -> p2 -> p3
-   vertex::write_vertex(buf, idx + 3, vertex::vertex(p0.x, p0.y, p0.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
-   vertex::write_vertex(buf, idx + 4, vertex::vertex(p2.x, p2.y, p2.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
-   vertex::write_vertex(buf, idx + 5, vertex::vertex(p3.x, p3.y, p3.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
+   vertex::write_vertex(buf, idx + 3, vertex::vertex_uv(p0.x, p0.y, p0.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z, 0.50, 0.00))
+   vertex::write_vertex(buf, idx + 4, vertex::vertex_uv(p2.x, p2.y, p2.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z, 0.79, 0.90))
+   vertex::write_vertex(buf, idx + 5, vertex::vertex_uv(p3.x, p3.y, p3.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z, 0.21, 0.90))
    // Triangle 3: p0 -> p3 -> p4
-   vertex::write_vertex(buf, idx + 6, vertex::vertex(p0.x, p0.y, p0.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
-   vertex::write_vertex(buf, idx + 7, vertex::vertex(p3.x, p3.y, p3.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
-   vertex::write_vertex(buf, idx + 8, vertex::vertex(p4.x, p4.y, p4.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z))
+   vertex::write_vertex(buf, idx + 6, vertex::vertex_uv(p0.x, p0.y, p0.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z, 0.50, 0.00))
+   vertex::write_vertex(buf, idx + 7, vertex::vertex_uv(p3.x, p3.y, p3.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z, 0.21, 0.90))
+   vertex::write_vertex(buf, idx + 8, vertex::vertex_uv(p4.x, p4.y, p4.z, col.r, col.g, col.b, col.a, norm.x, norm.y, norm.z, 0.02, 0.35))
    idx + 9
 
 // -----------------------------------------------------------------------------
@@ -76,7 +76,7 @@ write_pentagon_face = buf, idx, p0, p1, p2, p3, p4, col =>
 // -----------------------------------------------------------------------------
 
 // Tetrahedron from 4 arbitrary corner points
-write_tetrahedron_4pt: Addr, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, (Int => color::Color) => Int
+write_tetrahedron_4pt: Builder, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, (Int => color::Color) => Int
 write_tetrahedron_4pt = buf, idx, p0, p1, p2, p3, color_fn =>
    k1 = write_tri(buf, idx, p0, p1, p2, color_fn(0))
    k2 = write_tri(buf, k1,  p0, p2, p3, color_fn(1))
@@ -85,7 +85,7 @@ write_tetrahedron_4pt = buf, idx, p0, p1, p2, p3, color_fn =>
    k4
 
 // Octahedron from 6 points (top, bottom, and 4 equator points CCW from above)
-write_octahedron_6pt: Addr, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, (Int => color::Color) => Int
+write_octahedron_6pt: Builder, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, (Int => color::Color) => Int
 write_octahedron_6pt = buf, idx, p_top, p_bot, eq0, eq1, eq2, eq3, color_fn =>
    k1 = write_tri(buf, idx, p_top, eq0, eq1, color_fn(0))
    k2 = write_tri(buf, k1,  p_top, eq1, eq2, color_fn(1))
@@ -98,7 +98,7 @@ write_octahedron_6pt = buf, idx, p_top, p_bot, eq0, eq1, eq2, eq3, color_fn =>
    k8
 
 // Hexahedron from 8 corner points (4 top corners CCW, 4 bottom corners CCW)
-write_hexahedron_8pt: Addr, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, (Int => color::Color) => Int
+write_hexahedron_8pt: Builder, Int, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, geom::Vec3, (Int => color::Color) => Int
 write_hexahedron_8pt = buf, idx, t0, t1, t2, t3, b0, b1, b2, b3, color_fn =>
    k1 = write_quad_face(buf, idx, t3, b3, b2, t2, color_fn(0)) // Front (+Z)
    k2 = write_quad_face(buf, k1,  t2, b2, b1, t1, color_fn(1)) // Right (+X)
@@ -113,7 +113,7 @@ write_hexahedron_8pt = buf, idx, t0, t1, t2, t3, b0, b1, b2, b3, color_fn =>
 // -----------------------------------------------------------------------------
 
 // 1. Regular Tetrahedron (4 faces, 12 vertices) centered at origin
-write_tetrahedron: Addr, Int, Float, (Int => color::Color) => Int
+write_tetrahedron: Builder, Int, Float, (Int => color::Color) => Int
 write_tetrahedron = buf, idx, size, color_fn =>
    s = size * 0.57735026919
    ns = 0.0 - s
@@ -124,7 +124,7 @@ write_tetrahedron = buf, idx, size, color_fn =>
    write_tetrahedron_4pt(buf, idx, p0, p1, p2, p3, color_fn)
 
 // 2. Regular Hexahedron / Cube (6 faces, 36 vertices) centered at origin
-write_cube: Addr, Int, Float, (Int => color::Color) => Int
+write_cube: Builder, Int, Float, (Int => color::Color) => Int
 write_cube = buf, idx, size, color_fn =>
    h = size * 0.5
    nh = 0.0 - h
@@ -139,7 +139,7 @@ write_cube = buf, idx, size, color_fn =>
    write_hexahedron_8pt(buf, idx, t0, t1, t2, t3, b0, b1, b2, b3, color_fn)
 
 // 3. Regular Octahedron (8 faces, 24 vertices) centered at origin
-write_octahedron: Addr, Int, Float, (Int => color::Color) => Int
+write_octahedron: Builder, Int, Float, (Int => color::Color) => Int
 write_octahedron = buf, idx, size, color_fn =>
    r = size * 0.70710678118
    nr = 0.0 - r
@@ -152,7 +152,7 @@ write_octahedron = buf, idx, size, color_fn =>
    write_octahedron_6pt(buf, idx, top, bot, eq0, eq1, eq2, eq3, color_fn)
 
 // 4. Regular Icosahedron (20 triangular faces, 60 vertices) centered at origin
-write_icosahedron: Addr, Int, Float, (Int => color::Color) => Int
+write_icosahedron: Builder, Int, Float, (Int => color::Color) => Int
 write_icosahedron = buf, idx, size, color_fn =>
    s = size * 0.52573111212
    a = 1.0 * s
@@ -199,7 +199,7 @@ write_icosahedron = buf, idx, size, color_fn =>
    k20
 
 // 5. Regular Dodecahedron (12 pentagonal faces, 108 vertices) centered at origin
-write_dodecahedron: Addr, Int, Float, (Int => color::Color) => Int
+write_dodecahedron: Builder, Int, Float, (Int => color::Color) => Int
 write_dodecahedron = buf, idx, size, color_fn =>
    s = size * 0.57735026919
    c1 = 1.0 * s
@@ -254,7 +254,7 @@ write_dodecahedron = buf, idx, size, color_fn =>
 // -----------------------------------------------------------------------------
 
 // Planar square/rectangle on the XZ floor with upward normal (0, 1, 0)
-write_plane: Addr, Int, Float, Float, color::Color => Int
+write_plane: Builder, Int, Float, Float, color::Color => Int
 write_plane = buf, idx, half_w, half_d, col =>
    nw = 0.0 - half_w
    nd = 0.0 - half_d
@@ -265,7 +265,7 @@ write_plane = buf, idx, half_w, half_d, col =>
    write_quad_face(buf, idx, p0, p3, p2, p1, col)
 
 // Radial 4-quadrant base floor with upward normal (0, 1, 0) and radial gradient
-write_star_base: Addr, Int, color::Color, color::Color => Int
+write_star_base: Builder, Int, color::Color, color::Color => Int
 write_star_base = buf, idx, center_col, edge_col =>
    up = geom::vec3(0.0, 1.0, 0.0)
    c0 = geom::vec3( 0.0, 0.0,  0.0)

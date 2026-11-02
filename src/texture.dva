@@ -1,0 +1,179 @@
+// shapes/src/texture.dva — Procedural 2D RGBA8 Texture Generator & UV Samplers
+// Rasterizes procedural (u, v => color::Color) surface samplers into contiguous
+// RGBA8 pixel buffers ready for WebGL / GPU texture upload.
+
+#use const
+#use color
+
+#public
+
+// 2D RGBA8 texture buffer (4 bytes per pixel: R, G, B, A in 0..255)
+#type Texture (
+   width:  Int,
+   height: Int,
+   pixels: Builder
+)
+
+// Clamp normalized [0.0, 1.0] float channel to 0..255 byte
+channel_byte: Float => Int
+channel_byte = v =>
+   c = v < 0.0 | 0.0 | (v > 1.0 | 1.0 | v)
+   Int(%round(c * 255.0))
+
+// Fractional part of a positive or negative float in [0.0, 1.0)
+fract: Float => Float
+fract = x =>
+   x - %floor(x)
+
+// Rasterize a procedural UV sampler (u: Float, v: Float => Color) into an RGBA8 Texture
+generate: Int, Int, (Float, Float => color::Color) => Texture
+generate = width, height, sampler =>
+   pixels = {width * height * 4}
+   w_flt = Float(width)
+   h_flt = Float(height)
+
+   height @ y =>
+      v = (Float(y) + 0.5) / h_flt
+      width @ x =>
+         u = (Float(x) + 0.5) / w_flt
+         col = sampler(u, v)
+         pixels += channel_byte(col.r)
+         pixels += channel_byte(col.g)
+         pixels += channel_byte(col.b)
+         pixels += channel_byte(col.a)
+
+   Texture(width, height, pixels)
+
+// --- Procedural 2D UV Texture Samplers (u: Float, v: Float => color::Color) ---
+
+// 1. Checkerboard pattern with `cells` tiles per unit UV
+checkerboard: Int, color::Color, color::Color => (Float, Float => color::Color)
+checkerboard = cells, c1, c2 =>
+   n = Float(cells)
+   u, v =>
+      ix = Int(%floor(u * n))
+      iy = Int(%floor(v * n))
+      (ix + iy) % 2 == 0 | c1 | c2
+
+// 2. Coordinate grid lines with `cells` divisions and `thickness` in (0.0, 0.5)
+grid: Int, Float, color::Color, color::Color => (Float, Float => color::Color)
+grid = cells, thickness, line_col, fill_col =>
+   n = Float(cells)
+   half_t = thickness * 0.5
+   u, v =>
+      fu = fract(u * n)
+      fv = fract(v * n)
+      on_u = fu < half_t || fu > 1.0 - half_t
+      on_v = fv < half_t || fv > 1.0 - half_t
+      on_u || on_v | line_col | fill_col
+
+// 3. Horizontal / vertical stripes along U or V
+stripes_u: Int, color::Color, color::Color => (Float, Float => color::Color)
+stripes_u = count, c1, c2 =>
+   n = Float(count)
+   u, v =>
+      Int(%floor(u * n)) % 2 == 0 | c1 | c2
+
+stripes_v: Int, color::Color, color::Color => (Float, Float => color::Color)
+stripes_v = count, c1, c2 =>
+   n = Float(count)
+   u, v =>
+      Int(%floor(v * n)) % 2 == 0 | c1 | c2
+
+// 4. Running-bond staggered brick & mortar pattern
+brick: Int, Int, color::Color, color::Color => (Float, Float => color::Color)
+brick = cols, rows, brick_col, mortar_col =>
+   c_flt = Float(cols)
+   r_flt = Float(rows)
+   u, v =>
+      row_idx = Int(%floor(v * r_flt))
+      offset = row_idx % 2 == 0 | 0.0 | 0.5
+      fu = fract(u * c_flt + offset)
+      fv = fract(v * r_flt)
+      is_mortar = fu < 0.06 || fu > 0.94 || fv < 0.10 || fv > 0.90
+      is_mortar | mortar_col | brick_col
+
+// 5. Polka-dot / circular tile array
+dots: Int, Float, color::Color, color::Color => (Float, Float => color::Color)
+dots = cells, radius, dot_col, bg_col =>
+   n = Float(cells)
+   r2 = radius * radius
+   u, v =>
+      du = fract(u * n) - 0.5
+      dv = fract(v * n) - 0.5
+      (du * du) + (dv * dv) < r2 | dot_col | bg_col
+
+// 6. Smooth trigonometric turbulence marble veins
+marble: color::Color, color::Color, Float => (Float, Float => color::Color)
+marble = vein_col, base_col, scale =>
+   u, v =>
+      x = u * scale * const::tau
+      y = v * scale * const::tau
+      turb = %sin(x + 1.5 * %sin(y * 1.3)) + 0.5 * %sin(y * 2.1 + %cos(x * 1.7)) + 0.25 * %cos((x + y) * 2.7)
+      t = %pow((%sin(x * 0.8 + y * 0.6 + turb * 1.8) + 1.0) * 0.5, 2.2)
+      color::lerp(base_col, vein_col, t)
+
+// 7. Concentric wood grain rings with organic radial ripple
+wood: color::Color, color::Color, Float => (Float, Float => color::Color)
+wood = light_wood, dark_wood, rings =>
+   u, v =>
+      dx = u - 0.5
+      dy = v - 0.5
+      dist = %sqrt((dx * dx) + (dy * dy))
+      ripple = 0.03 * %sin(dx * 18.0) * %cos(dy * 18.0)
+      w = (%sin((dist + ripple) * rings * const::tau) + 1.0) * 0.5
+      color::lerp(dark_wood, light_wood, w)
+
+// 8. Spherical studio environment reflection map (for mirror / chrome / metallic surfaces)
+// Maps view-space reflection coordinates (u, v) in [0, 1]^2 to a studio sky dome,
+// sharp metallic horizon band, dual studio softbox highlights, and ground bounce.
+reflective: color::Color, color::Color, color::Color => (Float, Float => color::Color)
+reflective = sky_col, horizon_col, ground_col =>
+   u, v =>
+      // Normalized spherical coordinates in [-1, 1] (y > 0 is upper sky hemisphere)
+      nx = (u - 0.5) * 2.0
+      ny = (0.5 - v) * 2.0
+
+      // Gentle studio horizon wave
+      h_wave = 0.04 * %sin(nx * const::pi * 2.0)
+      alt = ny - h_wave
+
+      // Base sky / ground studio dome transition
+      base = alt !< 0.0
+         |
+            t_sky = %pow(%clamp(alt, 0.0, 1.0), 0.65)
+            color::lerp(horizon_col, sky_col, t_sky)
+         |
+            t_gnd = %pow(%clamp(-alt, 0.0, 1.0), 0.55)
+            h_dim = color::color_rgba(horizon_col.r * 0.45, horizon_col.g * 0.45, horizon_col.b * 0.45, horizon_col.a)
+            color::lerp(h_dim, ground_col, t_gnd)
+
+      // Crisp metallic horizon reflection ring
+      h_band = 0.55 / (1.0 + (alt * alt * 120.0))
+
+      // Studio softbox highlight 1 (upper-right key softbox)
+      dx1 = nx - 0.36
+      dy1 = ny - 0.48
+      box1 = 0.85 / (1.0 + ((dx1 * dx1 + dy1 * dy1) * 24.0))
+
+      // Studio softbox highlight 2 (upper-left cool rim softbox)
+      dx2 = nx + 0.45
+      dy2 = ny - 0.30
+      box2 = 0.55 / (1.0 + ((dx2 * dx2 + dy2 * dy2) * 32.0))
+
+      boost = h_band + box1 + box2
+      color::color_rgba(
+         %clamp(base.r + boost, 0.0, 1.0),
+         %clamp(base.g + boost, 0.0, 1.0),
+         %clamp(base.b + boost * 1.05, 0.0, 1.0),
+         base.a
+      )
+
+// Canonical liquid-chrome studio reflection sampler
+chrome: () => (Float, Float => color::Color)
+chrome = !=>
+   reflective(
+      color::color(0.24, 0.52, 0.92),
+      color::color(0.88, 0.94, 1.00),
+      color::color(0.14, 0.16, 0.24)
+   )

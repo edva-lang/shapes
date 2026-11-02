@@ -7,8 +7,8 @@
 // --- 3D Mesh Face Palette Providers ---
 
 // Classic high-contrast distinct cube 6-face coloring
-cube_default: Int => color::Color
-cube_default = face =>
+cube: Int => color::Color
+cube = face =>
    face % 6
       [0] color::cyan      // Front (+Z)
       [1] color::amber     // Right (+X)
@@ -18,8 +18,8 @@ cube_default = face =>
       |   color::slate     // Bottom (-Y)
 
 // Distinct 8-face coloring for Octahedron
-octahedron_default: Int => color::Color
-octahedron_default = face =>
+octahedron: Int => color::Color
+octahedron = face =>
    face % 8
       [0] color::amber
       [1] color::cyan
@@ -31,8 +31,8 @@ octahedron_default = face =>
       |   color::magenta
 
 // Distinct 4-face coloring for Tetrahedron
-tetrahedron_default: Int => color::Color
-tetrahedron_default = face =>
+tetrahedron: Int => color::Color
+tetrahedron = face =>
    face % 4
       [0] color::ruby
       [1] color::amber
@@ -40,8 +40,8 @@ tetrahedron_default = face =>
       |   color::sapphire
 
 // Distinct 12-face coloring for Dodecahedron
-dodecahedron_default: Int => color::Color
-dodecahedron_default = face =>
+dodecahedron: Int => color::Color
+dodecahedron = face =>
    face % 12
       [0]  color::rgb(0.95, 0.35, 0.25)
       [1]  color::rgb(0.95, 0.55, 0.20)
@@ -57,8 +57,8 @@ dodecahedron_default = face =>
       |    color::rgb(0.95, 0.25, 0.75)
 
 // Distinct 20-face coloring for Icosahedron
-icosahedron_default: Int => color::Color
-icosahedron_default = face =>
+icosahedron: Int => color::Color
+icosahedron = face =>
    face % 20
       [0]  color::rgb(0.95, 0.35, 0.25)
       [1]  color::rgb(0.95, 0.55, 0.20)
@@ -82,8 +82,8 @@ icosahedron_default = face =>
       |    color::rgb(0.55, 0.40, 0.95)
 
 // Smooth iridescent jewel palette for curved shapes
-curved_default: Int => color::Color
-curved_default = idx =>
+curved: Int => color::Color
+curved = idx =>
    idx % 8
       [0] color::rgb(0.20, 0.75, 0.95) // Cyan
       [1] color::rgb(0.25, 0.50, 0.95) // Azure
