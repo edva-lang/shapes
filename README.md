@@ -11,7 +11,7 @@
 - **Automatic Surface Normals**: Flat face normals via normalized cross products (`geom::normal3`) and analytical smooth surface derivatives (`curve::polar_normal`) for curved and polar cross-section shapes.
 - **3D Curve Framing & Parallel Transport (`shapes/curve`)**: Supports both discrete polyline point sequences `geom::Vec3{}` and continuous parametric curves `(Float => geom::Vec3)` via the `FilamentSpine` choice type, propagating twist-free Bishop frames (`initial_frame`, `transport_frame`) along any 3D curve.
 - **Direct 12-Float RGBA+UV GPU Vertex Layout (`VERTEX_STRIDE = 48` bytes)**: Writes interleaved `(px, py, pz, cr, cg, cb, ca, nx, ny, nz, u, v)` `f32` vertices directly into target memory buffers, paired with `shapes::Mesh` (`(start: Int, count: Int)`) slices for clean draw-call submission.
-- **Procedural 2D RGBA8 & Reflective Environment Textures (`shapes/texture`)**: Rasterizes any `(u: Float, v: Float => Color)` sampler (`checkerboard`, `grid`, `stripes_u`, `stripes_v`, `brick`, `dots`, `marble`, `wood`, `reflective`, `chrome`) into an RGBA8 `Texture` buffer ready for `gl.texImage2D`.
+- **Procedural 2D RGBA8 & Reflective Environment Textures (`shapes/texture`)**: Rasterizes any `(u: Float, v: Float => Color)` sampler (`checkerboard`, `grid`, `stripes_u`, `stripes_v`, `brick`, `dots`, `marble`, `wood`, `reflective`, `chrome`) into an RGBA8 `Texture` buffer ready for `gl.texImage2D`, with lossless PNG & QOI export/import (`save_png`, `save_qoi`, `load`, `to_image`, `from_image`) via `std/img`.
 - **Zero WebAssembly Allocations**: Safe for high-frequency 60 FPS WebGL/WebGPU render loops without garbage collection or heap churn.
 
 ---
@@ -34,7 +34,7 @@ dependencies =
 | :--- | :--- | :--- |
 | [`src/vertex.dva`](src/vertex.dva) | `Vertex: #packed (12 * f32)`, `VERTEX_STRIDE = 48`, `Mesh: (start, count: Int)`, `mesh(start, end_idx)` | 48-byte RGBA+UV interleaved vertex layout (`pos3, rgba4, norm3, uv2`), low-level `write_vertex` emitters, and `Mesh` slice tracking. |
 | [`src/palette.dva`](src/palette.dva) | `tetrahedron`, `cube`, `octahedron`, `dodecahedron`, `icosahedron`, `curved` | Canonical high-contrast face palettes built on `std/color` (`#use @shapes/palette`). |
-| [`src/texture.dva`](src/texture.dva) | `Texture`, `generate`, `checkerboard`, `grid`, `stripes_u`, `stripes_v`, `brick`, `dots`, `marble`, `wood`, `reflective`, `chrome` | Procedural 2D RGBA8 texture generator, UV surface samplers, and spherical reflection maps (`#use @shapes/texture`). |
+| [`src/texture.dva`](src/texture.dva) | `Texture`, `generate`, `to_image`, `from_image`, `encode_png`, `encode_qoi`, `decode`, `save`, `save_png`, `save_qoi`, `load`, `checkerboard`, `grid`, `stripes_u`, `stripes_v`, `brick`, `dots`, `marble`, `wood`, `reflective`, `chrome` | Procedural 2D RGBA8 texture generator, UV surface samplers, spherical reflection maps, and `std/img` PNG/QOI encoding & file I/O (`#use @shapes/texture`). |
 | [`src/polyhedra.dva`](src/polyhedra.dva) | `write_tetrahedron`, `write_cube`, `write_octahedron`, `write_dodecahedron`, `write_icosahedron`, `write_plane`, `write_star_base` | Platonic solids, arbitrary point-based polyhedra (`write_tetrahedron_4pt`, `write_octahedron_6pt`, `write_hexahedron_8pt`), and planar helpers. |
 | [`src/curve.dva`](src/curve.dva) | `FilamentSpine`, `spine_points`, `spine_curve`, `resolve_spine`, `curve_tangent`, `initial_frame`, `transport_frame`, `polar_normal` | 3D parametric curve sampling, central-difference tangents, parallel-transported Bishop normal/binormal frames, and analytical polar cross-section normals. |
 | [`src/curved.dva`](src/curved.dva) | `write_sphere`, `write_cylinder`, `write_cone`, `write_torus`, `write_filament` | Smoothly shaded parametric surfaces and generalized polar cross-section tubes/filaments. |
@@ -107,6 +107,25 @@ k_end = shapes::write_filament(
    sapphire_to_emerald
 )
 filament_mesh = shapes::mesh(0, k_end)
+```
+
+### 3. Procedural Texture Generation & PNG / QOI Export (`@shapes/texture`)
+
+```dva
+#use color
+#use @shapes/texture
+
+// Rasterize a 256×256 procedural marble texture
+tex = texture::generate(256, 256, texture::marble(
+   color::rgb(0.95, 0.94, 0.92),
+   color::rgb(0.18, 0.24, 0.36),
+   4.0
+))
+
+// Save as PNG or QOI via std/img, or reload from disk
+texture::save_png("marble.png", tex)
+texture::save_qoi("marble.qoi", tex)
+loaded = texture::load("marble.png")!!
 ```
 
 ---

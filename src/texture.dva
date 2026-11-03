@@ -4,6 +4,8 @@
 
 #use const
 #use color
+#use fs
+#use img
 
 #public
 
@@ -177,3 +179,60 @@ chrome = !=>
       color::color(0.88, 0.94, 1.00),
       color::color(0.14, 0.16, 0.24)
    )
+
+// --- Image Codec Interop (`std/img` — PNG & QOI) ----------------------------
+
+// Converts a `Texture` into an immutable `img::Image` without consuming `tex.pixels`.
+to_image: Texture => img::Image
+to_image = tex =>
+   px = tex.pixels
+   n = ?px
+   b = {n}
+   b += px(0..n)
+   img::Image(tex.width, tex.height, +b)
+
+// Converts an `img::Image` into a `Texture`.
+from_image: img::Image => Texture
+from_image = im =>
+   b = {?im.pixels}
+   b += im.pixels
+   Texture(im.width, im.height, b)
+
+// Encodes `tex` into an in-memory lossless RGBA8 PNG byte string.
+encode_png: Texture => String
+encode_png = tex =>
+   img::encode_png(to_image(tex))
+
+// Encodes `tex` into an in-memory lossless RGBA8 QOI byte string.
+encode_qoi: Texture => String
+encode_qoi = tex =>
+   img::encode_qoi(to_image(tex))
+
+// Decodes a PNG or QOI byte string into a `Texture`.
+decode: String => < Texture | Error >
+decode = data =>
+   img::decode(data)
+      | im => <+ from_image(im) ->
+      | err => <- err +>
+
+// Encodes and saves `tex` as a lossless RGBA8 PNG file at `path`.
+save_png: String, Texture => <>
+save_png = path, tex =>
+   fs::write_file(path, encode_png(tex))
+
+// Encodes and saves `tex` as a lossless RGBA8 QOI file at `path`.
+save_qoi: String, Texture => <>
+save_qoi = path, tex =>
+   fs::write_file(path, encode_qoi(tex))
+
+// Saves `tex` to `path` as PNG (or QOI if `path` ends with `.qoi`).
+save: String, Texture => <>
+save = path, tex =>
+   img::save(path, to_image(tex))
+
+// Loads a PNG or QOI image file from `path` into a `Texture`.
+load: String => < Texture | Error >
+load = path =>
+   img::load(path)
+      | im => <+ from_image(im) ->
+      | err => <- err +>

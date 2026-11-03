@@ -1,5 +1,6 @@
 // shapes/tests/test_shapes.dva — Test suite for 3D shapes library
 #use io
+#use fs
 #use "math/geom"
 #use color
 #use "../src/shapes"
@@ -126,6 +127,22 @@ main = !=>
 
    tex_chrome = texture::generate(16, 16, texture::chrome!)
    assert_flag("reflective chrome texture byte length", ?tex_chrome.pixels == 16 * 16 * 4)
+
+   tmp_tex_png = "/tmp/shapes_test_tex.png"
+   tmp_tex_qoi = "/tmp/shapes_test_tex.qoi"
+   assert_flag("texture::save_png", texture::save_png(tmp_tex_png, tex_chrome))
+   assert_flag("texture::save_qoi", texture::save_qoi(tmp_tex_qoi, tex_chrome))
+   loaded_tex_png = texture::load(tmp_tex_png)!!
+   loaded_tex_qoi = texture::load(tmp_tex_qoi)!!
+   orig_px = texture::to_image(tex_chrome).pixels
+   assert_flag("texture::load PNG roundtrip", texture::to_image(loaded_tex_png).pixels == orig_px)
+   assert_flag("texture::load QOI roundtrip", texture::to_image(loaded_tex_qoi).pixels == orig_px)
+   png_mem = texture::encode_png(tex_marble)
+   qoi_mem = texture::encode_qoi(tex_marble)
+   assert_flag("texture::decode PNG in-memory roundtrip", texture::to_image(texture::decode(png_mem)!!).pixels == texture::to_image(tex_marble).pixels)
+   assert_flag("texture::decode QOI in-memory roundtrip", texture::to_image(texture::decode(qoi_mem)!!).pixels == texture::to_image(tex_marble).pixels)
+   fs::remove(tmp_tex_png)
+   fs::remove(tmp_tex_qoi)
 
    io::out("All shapes tests completed successfully.")
 
