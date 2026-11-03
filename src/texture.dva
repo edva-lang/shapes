@@ -19,8 +19,7 @@
 // Clamp normalized [0.0, 1.0] float channel to 0..255 byte
 channel_byte: Float => Int
 channel_byte = v =>
-   c = v < 0.0 | 0.0 | (v > 1.0 | 1.0 | v)
-   Int(%round(c * 255.0))
+   Int(%round(%clamp(v, 0.0, 1.0) * 255.0))
 
 // Fractional part of a positive or negative float in [0.0, 1.0)
 fract: Float => Float
